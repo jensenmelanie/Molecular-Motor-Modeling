@@ -1,0 +1,117 @@
+## Model Comparison Functions 
+
+
+##============================================================
+## Helper functions  
+##============================================================
+row_to_list = function(matrix){
+	lapply(seq_len(ncol(matrix)), function(i) matrix[i,] )
+}
+
+
+every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
+	to_take_index = seq((ceiling(nrow(matrix)*burn_in_per) + 1), ceiling(nrow(matrix)), by = every_kth)
+	return(matrix[to_take_index,])
+}
+
+
+
+##-------------------------------------------------------------------
+## log likelihoods functions
+##-------------------------------------------------------------------
+
+
+ll_BMdrift = function(time, Xn, pars){
+	Delta = diff(time)[1]
+	num_incr = length(Xn)-1
+	lambda = pars[1]; eta = pars[2]
+	
+	return((num_incr/2)*(log(eta) - log(2*pi*Delta)) - (eta/(2*Delta))*sum((diff(Xn) - lambda*Delta)^2))
+	
+}
+
+
+
+ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
+	Delta = diff(time)[1]; num_incr = length(Xn) -1
+	num_switch = length(taus); num_states = num_switch + 1
+	
+	num_per_state = diff(c(1,taus,length(Xn))) 
+	
+	if(length(lambdas) == 1){lambdas = rep(lambdas, times = num_states)}
+	if(length(etas) == 1){etas = rep(etas, times = num_states)}
+
+	lambda_vec = c(lambdas[1],rep(lambdas, times = num_per_state))
+	eta_vec = c(etas[1],rep(etas, times = num_per_state))
+
+	return(sum((num_per_state/2)*log(etas)-1*(num_per_state/2)*log(2*pi*Delta))- sum((eta_vec[2:length(Xn)]/(2*Delta))*(Xn[2:(length(Xn))] - Xn[1:num_incr] - Delta*lambda_vec[2:length(Xn)])^2))
+
+}
+
+
+
+##============================================================
+## Model Comparison Functions
+##============================================================
+
+
+##-------------------------------------------------------------------
+##Posterior Bayes Score
+##-------------------------------------------------------------------
+
+PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kths = 1, burn_in_per = 0.5 ){
+	
+	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
+	if(num_switch_pts == 0){
+		par_mat = cbind(post_samples_k["lambda"], post_samples_k["eta"])
+		par_list = lapply(par_mat, row_to_list)
+		
+		return(mean(exp(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn)))))
+		
+	}else{
+		
+		num_samps = nrow(post_samples_k[[1]])
+
+		ll_n = c()
+		for(nn in 1:num_samps){
+			ll_n = c(ll_n,	ll_BMdrift_switch(data$time, data$Xn, post_samples_k[["tau"]][nn,], post_samples_k[["lambda"]][nn,], post_samples_k[["eta"]][nn,]) )	
+		}
+		return(	mean(exp(ll_n)))		
+	}
+	
+}
+
+
+
+##-------------------------------------------------------------------
+## mean Lppd
+##-------------------------------------------------------------------
+
+pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kths = 1, burn_in_per = 0.5 ){
+	
+	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
+	if(num_switch_pts == 0){
+		par_mat = cbind(post_samples_k["lambda"], post_samples_k["eta"])
+		par_list = lapply(par_mat, row_to_list)
+		
+		return(mean(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn))))
+		
+	}else{
+		
+		num_samps = nrow(post_samples_k[[1]])
+
+		ll_n = c()
+		for(nn in 1:num_samps){
+			ll_n = c(ll_n,	ll_BMdrift_switch(data$time, data$Xn, post_samples_k[["tau"]][nn,], post_samples_k[["lambda"]][nn,], post_samples_k[["eta"]][nn,]) )	
+		}
+		return(	mean(ll_n))		
+	}
+	
+}
+
+
+
+
+
