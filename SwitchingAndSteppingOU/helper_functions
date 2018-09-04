@@ -1,0 +1,45 @@
+###----------Helper functions
+
+##=========================================================================================
+## Sampler Functions
+##=========================================================================================
+rnorm_list = function(n, pars){
+	return(rnorm(n = 1, mean = pars[1], sd = sqrt(pars[2])))
+}
+
+rgamma_list = function(n, pars){
+	return(rgamma(n = 1, shape = pars[1], rate=pars[2]))
+}
+
+sampler_discrete_uniform = function(current, step){
+	return(sample((current -step):(current+step) , 1))
+}
+##=========================================================================================
+## Log likelihood for Brownian Motion with drift that switches paramter values at time tau
+##=========================================================================================
+ll_switch_interval = function(time, Xn, taus, lambdas, etas){
+	Delta = diff(time)[1]
+	
+	num_per_state = diff(taus) 
+	state_1_index = (taus[1]+1):taus[2]
+	state_2_index = (taus[2]+1):taus[3]
+
+
+	ll_1 = (num_per_state[1]/2)*(log(etas[1]) - log(2*pi*Delta))-(etas[1]/(2*Delta))*sum((Xn[state_1_index]- Xn[(state_1_index) -1] - Delta*lambdas[1])^2)
+	
+	ll_2 = (num_per_state[2]/2)*(log(etas[2]) + log(2*pi*Delta)) - (etas[2]/(2*Delta))*sum((Xn[state_2_index]- Xn[(state_2_index) -1] - Delta*lambdas[2])^2)
+
+	return(ll_1 + ll_2)
+
+}
+
+##=========================================================================================
+## Manipulating Lists Functions
+##=========================================================================================
+col_to_list = function(matrix){
+	lapply(seq_len(ncol(matrix)), function(i) matrix[,i] )
+}
+
+sum_diff_range = function(vector, index){
+	return(sum(diff(vector[index])))
+}
