@@ -1,0 +1,66 @@
+
+
+##===============================================================
+## Plotting for posterior samples of an MCMC algorithm where 
+## parameter values change over states
+##===============================================================
+
+plot_samples = function(samples, parname, log_samp = FALSE, plot_range = NA,every_kth = 1, burn_in_per = 0.5){
+	
+	if(is.matrix(samples) ==TRUE){
+		num_states = ncol(samples)
+		plot_shape = c(2, ceiling(min(8, num_states)/2))
+	}else{
+		num_states = 1; plot_shape = c(1,1)
+		samples = matrix(samples, ncol = 1)
+		}
+	
+	num_samples = nrow(samples)
+	sampling_index = (ceiling(num_samples*burn_in_per)+1): num_samples
+	every_kth = sampling_index[seq(1,length(sampling_index), by = every_kth)]
+		
+	
+	
+	par(mfrow =plot_shape, mar = c(5,4,1,1))
+	
+	
+	if(log_samp == FALSE){
+	
+		for(st in 1:num_states){
+	
+			if(is.na(plot_range)[1]==TRUE){
+				plot(every_kth, samples[every_kth,st], xlab = "Iterations", ylab = "Posterior samples", main = parname[st], type = "l")
+			}else{
+				plot(every_kth, samples[every_kth,st], xlab = "Iterations", ylab = "Posterior samples", main = parname[st], type = "l",ylim = plot_range)
+				
+				} #end of the plot range loop
+	
+		
+	
+		}# end of the state loop
+	
+	} else{
+		
+		for(st in 1:num_states){
+		
+		if(is.na(plot_range)[1]==TRUE){
+				plot(every_kth, log10(samples[every_kth,st]), xlab = "Iterations", ylab = "log10 Posterior samples", main = parname[st], type = "l", yaxt = "n")
+		log_at = floor(range(log10(samples[every_kth,st]))[1]):ceiling(range(log10(samples[every_kth,st]))[2])
+		log_lab = paste("10^", log_at)
+		
+		axis(2, at = log_at, log_lab, las = 2, cex.axis = 0.8)
+		
+		
+		} else{
+			plot(every_kth, log10(samples[every_kth,st]), xlab = "Iterations", ylab = "log10 Posterior samples", main = parname[st], type = "l", ylim = plot_range)
+			
+			
+			} # end of the given range loop
+			
+		}# end of the number of states loop
+		
+	} # end of the log loop
+	
+	
+	
+}
