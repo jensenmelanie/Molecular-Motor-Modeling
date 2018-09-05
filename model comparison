@@ -59,7 +59,7 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 ##Posterior Bayes Score
 ##-------------------------------------------------------------------
 
-PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kths = 1, burn_in_per = 0.5 ){
+PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, burn_in_per = 0.5 ){
 	
 	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
 
@@ -88,7 +88,7 @@ PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kths = 1, b
 ## mean Lppd
 ##-------------------------------------------------------------------
 
-pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kths = 1, burn_in_per = 0.5 ){
+pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, burn_in_per = 0.5 ){
 	
 	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
 
