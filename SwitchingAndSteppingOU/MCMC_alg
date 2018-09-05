@@ -1,0 +1,165 @@
+
+
+BMdrift_switch_inf = function(mydata, num_switches, iterations = 4000, warmup_per = 0.5){
+
+num_obs = length(mydata$time)
+num_states = num_switches + 1
+Delta = diff(mydata$time)[1]
+##---------------------------------------------------------------------
+## Storing the posterior samples
+##---------------------------------------------------------------------
+
+
+post_samp = list()
+post_samp$lambda = matrix(nrow = iterations, ncol = num_states)
+post_samp$eta = matrix(nrow = iterations, ncol = num_states)
+post_samp$tau = matrix(nrow = iterations, ncol = num_switches)
+
+overlapping_intervals= matrix(nrow = iterations, ncol = num_switches)
+accept_rates = matrix(nrow = iterations, ncol = num_switches)
+
+##---------------------------------------------------------------------
+## Initializing
+##---------------------------------------------------------------------
+intital_tau = floor(length(mydata$time)*(1:num_switches)/(num_states))
+post_samp$tau[1,] = intital_tau
+
+
+initial_lambda = rnorm(n = num_states, mean  =2, sd =1)
+#unlist(lapply(col_to_list(hyper_lambda), rnorm_list, n = 1))
+post_samp$lambda[1,] = initial_lambda
+
+initial_eta = rgamma(n = num_states, shape = 1, rate = 1)
+#unlist(lapply(col_to_list(hyper_eta), rgamma_list, n = 1))
+post_samp$eta[1,] = initial_eta
+
+cand_var_tau = ceiling(length(mydata$Xn)*(0.1)/2)
+
+
+
+##---------------------------------------------------------------------
+## Sampling
+##---------------------------------------------------------------------
+
+for( it in 2:iterations){
+
+tau_index_vec = c(1,post_samp$tau[it-1,], num_obs)
+state_list = list()
+
+for(st in 1:num_states){
+	state_list[[st]] = (tau_index_vec[st]): tau_index_vec[st+1]	
+}
+
+
+
+num_obs_st = diff(tau_index_vec)
+
+##-----------------------------eta block-----------------------------
+eta_post_alpha = num_obs_st/2 + mydata$hyper_eta[1,]
+eta_post_beta = c()
+
+for(st in 1:num_states){
+	eta_post_beta[st] = (2*Delta)^(-1)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta)^2) + mydata$hyper_eta[2,st]
+}
+
+
+post_samp$eta[it,] = unlist(lapply(col_to_list(rbind(eta_post_alpha,eta_post_beta)), rgamma_list,n = 1))
+
+##-----------------------------lambda block-----------------------------
+
+
+## Jeffreys prior (ie flat on lambda)
+lambda_post_var = (Delta*post_samp$eta[it,]*num_obs_st)^(-1)
+lambda_post_mean = unlist(lapply(state_list,sum_diff_range, vector = mydata$Xn))*(1/num_obs_st)*(1/Delta)
+
+## Normal prior of lambda
+#lambda_post_var = (post_samp$eta[it,]*Delta*num_obs_st + 1/hyper_lambda[2,])^(-1)
+#lambda_post_mean = ((hyper_lambda[1,]/hyper_lambda[2,]) + post_samp$eta[it,]*unlist(lapply(state_list,sum_diff_range, vector = mydata$Xn)))/(post_samp$eta[it,]*num_obs_st*Delta + 1/hyper_lambda[2,])
+
+post_samp$lambda[it,] = unlist(lapply(col_to_list(rbind(lambda_post_mean,lambda_post_var)), rnorm_list, n = 1))
+
+
+##-----------------------------tau block-----------------------------
+tau_vec_it = c(1, post_samp$tau[it-1,], num_obs)
+
+for(st in 1:num_switches){
+	
+	tau_loop_vec = tau_vec_it[st:(st+2)]
+
+	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau)
+	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
+	
+	 overlapping_indicator = as.numeric(cand_tau< tau_loop_vec[1] ) + as.numeric(cand_tau >= tau_loop_vec[3]) + as.numeric(cand_tau == 1) + as.numeric(cand_tau == num_obs)
+	
+	if( overlapping_indicator > 0){
+		ratio = 0; overlapping_intervals[it, st] = 1
+	}else{
+	
+		switch_lambdas = post_samp$lambda[it,c(st,st+1)]; 
+		switch_etas = post_samp$eta[it,c(st,st+1)]
+		
+
+		log_like_ratio = ll_switch_interval(mydata$time, mydata$Xn, cand_tau_vec, switch_lambdas, switch_etas) - ll_switch_interval(mydata$time,mydata$Xn, tau_loop_vec, switch_lambdas, switch_etas)
+				
+		ratio = exp(log_like_ratio)	
+		
+	} #End of get the ratio
+	
+	
+	accept_fnc_tau = min(1, ratio)
+	
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_tau){
+		post_samp$tau[it, st] = cand_tau; accept_rates[it,st] = 1
+		tau_vec_it[st+1] = cand_tau
+	}else {
+		post_samp$tau[it, st] = post_samp$tau[it-1,st]; accept_rates[it,st] = 0
+	}
+
+	
+} # End of the tau loop
+
+
+
+
+
+} # End of the iterations loop
+
+
+lambda_labels = c(expression(lambda[1]), expression(lambda[2]), expression(lambda[3])) 
+eta_labels = c(expression(eta[1]), expression(eta[2]), expression(eta[3])) 
+tau_labels = c(expression(tau[1]), expression(tau[2])) 
+
+
+
+
+plot_samples(post_samp$lambda, lambda_labels, FALSE)
+plot_samples(post_samp$eta, eta_labels, TRUE)
+plot_samples(post_samp$tau, tau_labels, FALSE, plot_range = c(1,151))
+
+
+
+
+sample_index =  (ceiling(iterations*warmup_per) + 1):iterations 
+
+post_lambda = apply(post_samp$lambda[sample_index,], 2, mean)
+post_eta = apply(post_samp$eta[sample_index,], 2, mean)
+
+if(num_switches > 1){ post_tau = round(apply(post_samp$tau[sample_index,], 2, mean))
+	}else{post_tau = round(mean(post_samp$tau[sample_index,1]))}
+
+
+bm_sim = BMdrif_switch_simulation(final_time, Delta, post_lambda, post_eta, switch_pts = post_tau, plot_it = FALSE )
+
+plot(time_seq, Xn, type = "l")
+lines(time_seq, bm_sim$Xn, type = "l", col = "springgreen3")
+abline(v = time_seq[post_tau], col = "navy", lty = 4)
+
+return(list(post_samp= post_samp, tau_accept = accept_rates))
+
+
+
+
+} #End of the function
+
+
