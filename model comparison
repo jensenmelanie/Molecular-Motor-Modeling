@@ -54,7 +54,6 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 ## Model Comparison Functions
 ##============================================================
 
-
 ##-------------------------------------------------------------------
 ##Posterior Bayes Score
 ##-------------------------------------------------------------------
@@ -69,7 +68,17 @@ PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, bu
 		
 		return(mean(exp(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn)))))
 		
-	}else{
+	}else if(num_switch_pts == 1){
+		num_samps = nrow(post_samples_k[[1]])
+
+		ll_n = c()
+		for(nn in 1:num_samps){
+			ll_n = c(ll_n,	ll_BMdrift_switch(data$time, data$Xn, post_samples_k[["tau"]][nn], post_samples_k[["lambda"]][nn,], post_samples_k[["eta"]][nn,]) )	
+		}
+		return(	mean(exp(ll_n)))		
+
+		
+		}else{
 		
 		num_samps = nrow(post_samples_k[[1]])
 
@@ -98,6 +107,14 @@ pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, 
 		
 		return(mean(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn))))
 		
+	}else if (num_switch_pts == 1){
+		num_samps = nrow(post_samples_k[[1]])
+
+		ll_n = c()
+		for(nn in 1:num_samps){
+			ll_n = c(ll_n,	ll_BMdrift_switch(data$time, data$Xn, post_samples_k[["tau"]][nn], post_samples_k[["lambda"]][nn,], post_samples_k[["eta"]][nn,]) )	
+		}
+		return(	mean(ll_n))		
 	}else{
 		
 		num_samps = nrow(post_samples_k[[1]])
@@ -110,6 +127,9 @@ pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, 
 	}
 	
 }
+
+
+
 
 
 
