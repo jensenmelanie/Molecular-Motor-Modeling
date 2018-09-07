@@ -66,7 +66,7 @@ plot_samples = function(samples, parname, log_samp = FALSE, plot_range = NA,ever
 }
 
 
-
+library(ggplot2)
 plot_post_hist = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 	every_kth_index = seq((ceiling(warmup*length(post_samp))+1),length(post_samp),by = every_kth)
 	
