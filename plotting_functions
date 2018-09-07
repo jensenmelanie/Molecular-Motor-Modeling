@@ -71,7 +71,7 @@ library(RColorBrewer)
 mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
 
 ##---------------------------------
-Posterior Sample Histograms
+##Posterior Sample Histograms
 ##------------------------------=
 plot_post_hist = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 	every_kth_index = seq((ceiling(warmup*length(post_samp))+1),length(post_samp),by = every_kth)
