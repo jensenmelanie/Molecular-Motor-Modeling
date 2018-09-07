@@ -71,5 +71,13 @@ plot_post_hist = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 	every_kth_index = seq((ceiling(warmup*length(post_samp))+1),length(post_samp),by = every_kth)
 	
 	post_samp_df = data.frame(samps = post_samp[every_kth_index])
+	qplot(post_samp_df$samp, geom= 'blank') + geom_line(aes(y = ..density.., color = "Emperical"), stat = 'density') + geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = 'Density', values = c('dodgerblue3')) + theme(legend.position = c(0.85, 0.85)) + labs(x = 'Posterior sample value', y = "Density", title = parname)
+}
+
+
+plot_post_histNorm = function(post_samp, parname, every_kth = 1, warmup = 0.5){
+	every_kth_index = seq((ceiling(warmup*length(post_samp))+1),length(post_samp),by = every_kth)
+	
+	post_samp_df = data.frame(samps = post_samp[every_kth_index])
 	qplot(post_samp_df$samp, geom= 'blank') + geom_line(aes(y = ..density.., color = "Emperical"), stat = 'density') + stat_function(fun = dnorm, args = list(mean = mean(post_samp_df$samp), sd = sd(post_samp_df$samp)),aes(colour = 'Normal')) + geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = 'Density', values = c('dodgerblue3', 'springgreen3')) + theme(legend.position = c(0.85, 0.85)) + labs(x = 'Posterior sample value', y = "Density", title = parname)
 }
