@@ -90,7 +90,7 @@ plot_post_histNorm = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 
 
 ##---------------------------------
-Posterior Sample Violin plots
+##Posterior Sample Violin plots
 ##--------------------------------
 plot_post_violin = function(post_samp, parname, par_range= NA, every_kth = 1, warmup = 0.5){
 
