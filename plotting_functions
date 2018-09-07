@@ -67,6 +67,12 @@ plot_samples = function(samples, parname, log_samp = FALSE, plot_range = NA,ever
 
 
 library(ggplot2)
+library(RColorBrewer)
+mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
+
+##---------------------------------
+Posterior Sample Histograms
+##------------------------------=
 plot_post_hist = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 	every_kth_index = seq((ceiling(warmup*length(post_samp))+1),length(post_samp),by = every_kth)
 	
@@ -82,6 +88,10 @@ plot_post_histNorm = function(post_samp, parname, every_kth = 1, warmup = 0.5){
 	qplot(post_samp_df$samp, geom= 'blank') + geom_line(aes(y = ..density.., color = "Emperical"), stat = 'density') + stat_function(fun = dnorm, args = list(mean = mean(post_samp_df$samp), sd = sd(post_samp_df$samp)),aes(colour = 'Normal')) + geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = 'Density', values = c('dodgerblue3', 'springgreen3')) + theme(legend.position = c(0.85, 0.85)) + labs(x = 'Posterior sample value', y = "Density", title = parname)
 }
 
+
+##---------------------------------
+Posterior Sample Violin plots
+##--------------------------------
 plot_post_violin = function(post_samp, parname, par_range= NA, every_kth = 1, warmup = 0.5){
 
 num_samples = nrow(post_samp)
@@ -97,12 +107,6 @@ my_colors = mellow.color.pal(num_par +2)
 	}else{
 		my_colors = my_colors[1:(num_par +1)]
 	}
-
-
-## Violin for nu
-matrix(post_samp, ncol = 1)
-
-head(post_samp[every_kth_index,])
 
 par_lab = 1:num_par
 par_mat = cbind(rep(par_lab,  each =num_samp_k ),c(post_samp[every_kth_index,]))
