@@ -1,6 +1,6 @@
 
 
-BMdrift_switch_inf = function(mydata, num_switches, iterations = 4000, warmup_per = 0.5){
+BMdrift_switch_inf = function(mydata, num_switches,cand_tau_step_per = 0.05,iterations = 4000, warmup_per = 0.5){
 
 num_obs = length(mydata$time)
 num_states = num_switches + 1
@@ -33,7 +33,7 @@ initial_eta = rgamma(n = num_states, shape = 1, rate = 1)
 #unlist(lapply(col_to_list(hyper_eta), rgamma_list, n = 1))
 post_samp$eta[1,] = initial_eta
 
-cand_var_tau = ceiling(length(mydata$Xn)*(0.1)/2)
+cand_var_tau = ceiling(length(mydata$Xn)*cand_tau_step_per)
 
 
 
