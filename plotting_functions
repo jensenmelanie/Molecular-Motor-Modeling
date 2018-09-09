@@ -137,7 +137,7 @@ post_samp_df = data.frame(par1 = post_samp[every_kth_index,1], par2 = post_samp[
 my_plot = ggplot(data = post_samp_df,  aes(x = par1, y = par2,colour = par3), alpha = 0.75)	+ geom_point()+labs(x = parname[1], y = parname[2],colour = parname[3], title = "Posterior Samples")
 
 if(is.na(true_values[1]) == FALSE){
-	my_plot + geom_hline(aes(yintercept = true_values[2]), color = "firebrick3",linetype = 2, size = 1 ) + geom_vline(aes(xintercept = true_values[2]), color = "firebrick3",linetype = 2, size = 1 )
+	my_plot + geom_hline(aes(yintercept = true_values[2]), color = "firebrick3",linetype = 2, size = 1 ) + geom_vline(aes(xintercept = true_values[1]), color = "firebrick3",linetype = 2, size = 1 )
 }else{my_plot}
 	
 }
