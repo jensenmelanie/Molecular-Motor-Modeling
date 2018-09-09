@@ -1,6 +1,6 @@
 
 
-BMdrift_switch_inf = function(mydata, num_switches,cand_tau_step_per = 0.05,iterations = 4000, warmup_per = 0.5){
+BMdrift_switch_inf = function(mydata, num_switches,cand_tau_step_per = 0.05,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
 
 num_obs = length(mydata$time)
 num_states = num_switches + 1
@@ -126,19 +126,9 @@ for(st in 1:num_switches){
 } # End of the iterations loop
 
 
-lambda_labels = c(expression(lambda[1]), expression(lambda[2]), expression(lambda[3])) 
-eta_labels = c(expression(eta[1]), expression(eta[2]), expression(eta[3])) 
-tau_labels = c(expression(tau[1]), expression(tau[2])) 
 
 
-
-
-plot_samples(post_samp$lambda, lambda_labels, FALSE)
-plot_samples(post_samp$eta, eta_labels, TRUE)
-plot_samples(post_samp$tau, tau_labels, FALSE, plot_range = c(1,151))
-
-
-
+if(plot_it == TRUE){
 
 sample_index =  (ceiling(iterations*warmup_per) + 1):iterations 
 
@@ -154,6 +144,8 @@ bm_sim = BMdrif_switch_simulation(final_time, Delta, post_lambda, post_eta, swit
 plot(time_seq, Xn, type = "l")
 lines(time_seq, bm_sim$Xn, type = "l", col = "springgreen3")
 abline(v = time_seq[post_tau], col = "navy", lty = 4)
+}
+
 
 return(list(post_samp= post_samp, tau_accept = accept_rates))
 
