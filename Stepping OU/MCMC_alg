@@ -1,0 +1,42 @@
+	
+BMdrift_MCMC_alg = function(data, iterations = 4000){	
+##-------------------------------------------------
+## Setting the hyperparameters and initializing 
+##-------------------------------------------------
+time = data$time; Delta = diff(time)[1]; num_incr = length(diff(Xn))
+Xn = data$Xn
+
+
+lambda_0 = rnorm(1, mean = 1, sd = 1)
+ eta_0 = rgamma(1, shape =1, rate = 1)
+ 
+##-------------------------------------------------
+## Defining output
+##-------------------------------------------------
+post_samp = list(lambda = vector(length = iterations), eta = vector(length = iterations))
+
+post_samp$lambda[1] = lambda_0
+post_samp$eta[1] = eta_0
+
+for( n in 1:(iterations -1)){
+
+##-------------------------------------------------
+## Lambda block
+##-------------------------------------------------
+lambda_post_mu = (1/Delta)*sum(diff(Xn))*(1/num_incr)
+lambda_post_sigma = sqrt((post_samp$eta[n]*Delta*num_incr)^(-1))
+post_samp$lambda[n+1] = rnorm(n = 1, mean = lambda_post_mu, sd = lambda_post_sigma)
+
+
+##-------------------------------------------------
+## eta block
+##-------------------------------------------------
+eta_post_alpha = num_incr/2
+eta_post_beta = (2*Delta)^(-1)*sum((diff(Xn) - post_samp$lambda[n+1]*Delta)^2)
+post_samp$eta[n+1] = rgamma(n = 1, shape = eta_post_alpha, rate = eta_post_beta)
+
+} #end of the sampling loop
+
+return(list(post_samp = post_samp, inital = c(lambda_0, eta_0)))
+
+} #end of the iterations loop
