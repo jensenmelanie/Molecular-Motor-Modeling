@@ -5,7 +5,7 @@
 ## Helper functions  
 ##============================================================
 row_to_list = function(matrix){
-	lapply(seq_len(ncol(matrix)), function(i) matrix[i,] )
+	lapply(seq_len(nrow(matrix)), function(i) matrix[i,] )
 }
 
 
@@ -60,15 +60,21 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 
 PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, burn_in_per = 0.5 ){
 	
-	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
 
 	if(num_switch_pts == 0){
-		par_mat = cbind(post_samples_k["lambda"], post_samples_k["eta"])
-		par_list = lapply(par_mat, row_to_list)
+		
+		every_kth = (ceiling(length(post_samples[[1]])*burn_in_per)+ 1):length(post_samples[[1]])
+		post_samples[c("lambda", "eta")][every_kth]
+		
+		
+		par_mat = cbind(post_samples[["lambda"]][every_kth], post_samples[["eta"]][every_kth])
+		par_list = lapply(seq_len(nrow(par_mat)), function(i) par_mat[i,] )
 		
 		return(mean(exp(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn)))))
 		
 	}else if(num_switch_pts == 1){
+		post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
 		num_samps = nrow(post_samples_k[[1]])
 
 		ll_n = c()
@@ -79,7 +85,8 @@ PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, bu
 
 		
 		}else{
-		
+		post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
 		num_samps = nrow(post_samples_k[[1]])
 
 		ll_n = c()
@@ -99,15 +106,22 @@ PBS_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, bu
 
 pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, burn_in_per = 0.5 ){
 	
-	post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
 
 	if(num_switch_pts == 0){
-		par_mat = cbind(post_samples_k["lambda"], post_samples_k["eta"])
-		par_list = lapply(par_mat, row_to_list)
+		
+		every_kth = (ceiling(length(post_samples[[1]])*burn_in_per)+ 1):length(post_samples[[1]])
+		post_samples[c("lambda", "eta")][every_kth]
+		
+		
+		par_mat = cbind(post_samples[["lambda"]][every_kth], post_samples[["eta"]][every_kth])
+		par_list = lapply(seq_len(nrow(par_mat)), function(i) par_mat[i,] )
+		
 		
 		return(mean(unlist(lapply(par_list,  ll_BMdrift, time= data$time, Xn = data$Xn))))
 		
 	}else if (num_switch_pts == 1){
+		post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
 		num_samps = nrow(post_samples_k[[1]])
 
 		ll_n = c()
@@ -116,7 +130,8 @@ pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, 
 		}
 		return(	mean(ll_n))		
 	}else{
-		
+		post_samples_k = lapply( post_samples,every_kth_entry, every_kth, burn_in_per)
+
 		num_samps = nrow(post_samples_k[[1]])
 
 		ll_n = c()
@@ -127,9 +142,6 @@ pwaic_BMdrift = function(data, post_samples, num_switch_pts = 0, every_kth = 1, 
 	}
 	
 }
-
-
-
 
 
 
