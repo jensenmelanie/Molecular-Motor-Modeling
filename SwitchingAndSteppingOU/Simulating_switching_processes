@@ -2,7 +2,7 @@
 ## BM with drift and switches simulation
 ##==========================================
 
-BMdrif_switch_simulation = function(final_time, Delta, lambdas, etas, switch_pts = c("uniform", 2),plot_it = TRUE){
+BMdrift_switch_simulation = function(final_time, Delta, lambdas, etas, switch_pts = c("uniform", 2),plot_it = TRUE){
 	
 	time_seq = seq(0, final_time, by = Delta)
 	num_obs = length(time_seq)
