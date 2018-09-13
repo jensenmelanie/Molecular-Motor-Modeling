@@ -63,8 +63,7 @@ for(st in 1:num_states){
 	state_list[[st]] = (tau_index_vec[st]): tau_index_vec[st+1]	
 	Delta_n_st[[st]] = diff(mydata$time[state_list[[st]]])
 	Xincr_st[[st]] = diff(mydata$Xn[state_list[[st]]])
-
-}
+	}
 
 
 
@@ -142,26 +141,6 @@ for(st in 1:num_switches){
 
 } # End of the iterations loop
 
-
-
-
-if(plot_it == TRUE){
-
-sample_index =  (ceiling(iterations*warmup_per) + 1):iterations 
-
-post_lambda = apply(post_samp$lambda[sample_index,], 2, mean)
-post_eta = apply(post_samp$eta[sample_index,], 2, mean)
-
-if(num_switches > 1){ post_tau = round(apply(post_samp$tau[sample_index,], 2, mean))
-	}else{post_tau = round(mean(post_samp$tau[sample_index,1]))}
-
-
-bm_sim = BMdrif_switch_simulation(final_time, Delta, post_lambda, post_eta, switch_pts = post_tau, plot_it = FALSE )
-
-plot(time_seq, Xn, type = "l")
-lines(time_seq, bm_sim$Xn, type = "l", col = "springgreen3")
-abline(v = time_seq[post_tau], col = "navy", lty = 4)
-}
 
 
 return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initial_tau))
