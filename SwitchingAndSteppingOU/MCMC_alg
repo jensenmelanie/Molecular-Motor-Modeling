@@ -74,7 +74,7 @@ eta_post_alpha = num_obs_st/2 #+ mydata$hyper_eta[1,]
 eta_post_beta = c()
 
 for(st in 1:num_states){
-	eta_post_beta[st] = (2)^(-1)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta_n_st[[st]])^2/Delta_n_st[[st]])
+	eta_post_beta[st] = (1/2)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta_n_st[[st]])^2/Delta_n_st[[st]])
 	 #+ mydata$hyper_eta[2,st]
 }
 
@@ -105,7 +105,7 @@ for(st in 1:num_switches){
 	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau)
 	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
 	
-	 overlapping_indicator = as.numeric(cand_tau<= tau_loop_vec[1] ) + as.numeric(cand_tau >= tau_loop_vec[3]) + as.numeric(cand_tau == 1) + as.numeric(cand_tau == num_obs)
+	 overlapping_indicator = as.numeric(cand_tau<= (tau_loop_vec[1]+1) ) + as.numeric(cand_tau >= (tau_loop_vec[3]-1)) + as.numeric(cand_tau <= 2) + as.numeric(cand_tau >= (num_obs-1))
 	
 	if( overlapping_indicator > 0){
 		ratio = 0; overlapping_intervals[it, st] = 1
