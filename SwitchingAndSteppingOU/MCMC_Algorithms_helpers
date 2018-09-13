@@ -35,8 +35,8 @@ if(init_tau == 'uniform'){
 	post_samp$tau[1,] = initial_tau
 }else{
 	
-	first_half = 1:floor((num_obs-1)*0.5)
-	second_half = (floor((num_obs-1)*0.5)+1):(num_obs-1)
+	first_half = 3:floor((num_obs-2)*0.5)
+	second_half = (floor((num_obs-2)*0.5)+1):(num_obs-2)
 	
 	possible_switches = c(sample(first_half, ceiling(num_switches/2)),sample(second_half, ceiling(num_switches/2)))
 	
