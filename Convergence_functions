@@ -1,0 +1,24 @@
+
+
+##-----------------------------------------------------
+## Convergence Statistic
+##-----------------------------------------------------
+
+Rhat_fnc = function(post_matrix){
+	num_samples  = nrow(post_matrix)
+	num_chains  = ncol(post_matrix)
+
+	chain_mean = apply(post_matrix, 2, mean)
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_samples/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(apply(post_matrix, 2, var)^2)
+	
+	Var_est = ((num_samples-1)/num_samples)*Within_var + (1/num_samples)*Between_var
+	
+	return(sqrt(Var_est/ Within_var))
+}
+
+
+
