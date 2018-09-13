@@ -55,9 +55,15 @@ for( it in 2:iterations){
 
 tau_index_vec = c(1,post_samp$tau[it-1,], num_obs)
 state_list = list()
+Delta_n_st = list()
+Xincr_st = list()
+
 
 for(st in 1:num_states){
 	state_list[[st]] = (tau_index_vec[st]): tau_index_vec[st+1]	
+	Delta_n_st[[st]] = diff(mydata$time[state_list[[st]]])
+	Xincr_st[[st]] = diff(mydata$Xn[state_list[[st]]])
+
 }
 
 
@@ -65,11 +71,12 @@ for(st in 1:num_states){
 num_obs_st = diff(tau_index_vec)
 
 ##-----------------------------eta block-----------------------------
-eta_post_alpha = num_obs_st/2 + mydata$hyper_eta[1,]
+eta_post_alpha = num_obs_st/2 #+ mydata$hyper_eta[1,]
 eta_post_beta = c()
 
 for(st in 1:num_states){
-	eta_post_beta[st] = (2*Delta)^(-1)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta)^2) + mydata$hyper_eta[2,st]
+	eta_post_beta[st] = (2)^(-1)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta_n_st[[st]])^2/Delta_n_st[[st]])
+	 #+ mydata$hyper_eta[2,st]
 }
 
 
@@ -79,8 +86,8 @@ post_samp$eta[it,] = unlist(lapply(col_to_list(rbind(eta_post_alpha,eta_post_bet
 
 
 ## Jeffreys prior (ie flat on lambda)
-lambda_post_var = (Delta*post_samp$eta[it,]*num_obs_st)^(-1)
-lambda_post_mean = unlist(lapply(state_list,sum_diff_range, vector = mydata$Xn))*(1/num_obs_st)*(1/Delta)
+lambda_post_var = (unlist(lapply(Delta_n_st,sum))*post_samp$eta[it,])^(-1)
+lambda_post_mean = unlist(lapply(Xincr_st, sum))/unlist(lapply(Delta_n_st,sum))
 
 ## Normal prior of lambda
 #lambda_post_var = (post_samp$eta[it,]*Delta*num_obs_st + 1/hyper_lambda[2,])^(-1)
