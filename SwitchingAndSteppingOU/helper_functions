@@ -17,21 +17,42 @@ sampler_discrete_uniform = function(current, step){
 ##=========================================================================================
 ## Log likelihood for Brownian Motion with drift that switches paramter values at time tau
 ##=========================================================================================
+
 ll_switch_interval = function(time, Xn, taus, lambdas, etas){
-	Delta = diff(time)[1]
 	
 	num_per_state = diff(taus) 
 	state_1_index = (taus[1]+1):taus[2]
 	state_2_index = (taus[2]+1):taus[3]
 
+	Delta_n1 = time[state_1_index] - time[state_1_index - 1]
 
-	ll_1 = (num_per_state[1]/2)*(log(etas[1]) - log(2*pi*Delta))-(etas[1]/(2*Delta))*sum((Xn[state_1_index]- Xn[(state_1_index) -1] - Delta*lambdas[1])^2)
+	ll_1 = (num_per_state[1]/2)*(log(etas[1]) - log(2*pi)) - sum(log(Delta_n1))-(etas[1]/2)*sum(((Xn[state_1_index]- Xn[(state_1_index) -1] - Delta_n1*lambdas[1])^2)/Delta_n1)
 	
-	ll_2 = (num_per_state[2]/2)*(log(etas[2]) + log(2*pi*Delta)) - (etas[2]/(2*Delta))*sum((Xn[state_2_index]- Xn[(state_2_index) -1] - Delta*lambdas[2])^2)
+	Delta_n2 = time[state_2_index] - time[state_2_index - 1]
+
+	ll_2 = (num_per_state[2]/2)*(log(etas[2]) - log(2*pi)) - sum(log(Delta_n2))-(etas[2]/2)*sum(((Xn[state_2_index]- Xn[(state_2_index) -1] - Delta_n2*lambdas[2])^2)/Delta_n2)
 
 	return(ll_1 + ll_2)
 
 }
+
+ll_switch_interval_2D = function(time, Xn, Yn, taus, lambdas, etas){
+	
+	num_per_state = diff(taus) 
+	state_1_index = (taus[1]+1):taus[2]
+	state_2_index = (taus[2]+1):taus[3]
+
+	Delta_n1 = time[state_1_index] - time[state_1_index - 1]
+	ll_1 = (num_per_state[1])*(log(etas[1]) - log(2*pi)) - sum(log(Delta_n1))-(etas[1]/2)*sum((((Xn[state_1_index]- Xn[(state_1_index) -1] - Delta_n1*lambdas[1])^2 +(Yn[state_1_index]- Yn[(state_1_index) -1] - Delta_n1*lambdas[1])^2)/Delta_n1))
+	
+	
+	Delta_n2 = time[state_2_index] - time[state_2_index - 1]
+	ll_2 = (num_per_state[2])*(log(etas[2]) - log(2*pi)) - sum(log(Delta_n2)) - (etas[2]/2)*sum((((Xn[state_2_index]- Xn[(state_2_index) -1] - Delta_n2*lambdas[2])^2 +(Yn[state_2_index]- Yn[(state_2_index) -1] - Delta_n2*lambdas[2])^2)/Delta_n2))
+
+	return(ll_1 + ll_2)
+
+}
+
 
 ##=========================================================================================
 ## Manipulating Lists Functions
@@ -42,4 +63,8 @@ col_to_list = function(matrix){
 
 sum_diff_range = function(vector, index){
 	return(sum(diff(vector[index])))
+}
+
+sum_two_lists = function(list1, list2, list_num){
+	return(list1[[list_num]] + list2[[list_num]])
 }
