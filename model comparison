@@ -20,20 +20,18 @@ every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
 ## log likelihoods functions
 ##-------------------------------------------------------------------
 
-
 ll_BMdrift = function(time, Xn, pars){
-	Delta = diff(time)[1]
 	num_incr = length(Xn)-1
 	lambda = pars[1]; eta = pars[2]
 	
-	return((num_incr/2)*(log(eta) - log(2*pi*Delta)) - (eta/(2*Delta))*sum((diff(Xn) - lambda*Delta)^2))
+	return((num_incr/2)*(log(eta) - log(2*pi)) - sum(log(diff(time))) - (eta/2)*sum((diff(Xn) - lambda*Delta)^2)/diff(time))
 	
 }
 
 
 
 ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
-	Delta = diff(time)[1]; num_incr = length(Xn) -1
+	num_incr = length(Xn) -1
 	num_switch = length(taus); num_states = num_switch + 1
 	
 	num_per_state = diff(c(1,taus,length(Xn))) 
@@ -44,7 +42,10 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 	lambda_vec = c(lambdas[1],rep(lambdas, times = num_per_state))
 	eta_vec = c(etas[1],rep(etas, times = num_per_state))
 
-	return(sum((num_per_state/2)*log(etas)-1*(num_per_state/2)*log(2*pi*Delta))- sum((eta_vec[2:length(Xn)]/(2*Delta))*(Xn[2:(length(Xn))] - Xn[1:num_incr] - Delta*lambda_vec[2:length(Xn)])^2))
+	Delta_n = diff(time_seq)
+
+
+	return(sum((num_per_state/2)*log(etas)-1*(num_per_state/2)*log(2*pi))- sum(log(Delta_n))- sum((eta_vec[2:length(Xn)]/2)*(Xn[2:(length(Xn))] - Xn[1:num_incr] - Delta_n*lambda_vec[2:length(Xn)])^2/Delta_n))
 
 }
 
