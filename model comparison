@@ -45,7 +45,7 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 	Delta_n = diff(time)
 
 
-	return(sum((num_per_state/2)*log(etas)-1*(num_per_state/2)*log(2*pi))- sum(log(Delta_n))- sum((eta_vec[2:length(Xn)]/2)*(Xn[2:(length(Xn))] - Xn[1:num_incr] - Delta_n*lambda_vec[2:length(Xn)])^2/Delta_n))
+	return(sum((num_per_state/2)*log(etas)-1*(num_per_state/2)*log(2*pi))- (1/2)*sum(log(Delta_n))- sum((eta_vec[2:length(Xn)]/2)*(Xn[2:(length(Xn))] - Xn[1:num_incr] - Delta_n*lambda_vec[2:length(Xn)])^2/Delta_n))
 
 }
 
