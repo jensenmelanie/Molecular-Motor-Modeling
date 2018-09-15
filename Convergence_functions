@@ -22,3 +22,51 @@ Rhat_fnc = function(post_matrix){
 
 
 
+variogram_fnc = function(post_matrix, lag_t){
+	num_chains = ncol(post_matrix)
+	num_lags =nrow(post_matrix) - lag_t
+	return((1/num_chains)*(1/num_lags)*sum(apply(post_matrix, 2,diff, lag = lag_t)^2))	
+}
+
+
+convergence_stats_fnc = function(post_matrix){
+	
+## To calculate the variance of the samples	
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+
+
+## Rhat Statistic	
+	Rhat = sqrt(Var_est/ Within_var)	
+	
+## N effective
+	
+	rho_hat_t = 1-(sapply(1:num_split_samp, variogram_fnc, post_matrix = post_matrix)/(2*Var_est))
+	
+	switch_sign = c(which(sign(rho_hat_t)[1:(num_split_samp-1)] != sign(rho_hat_t)[2:(num_split_samp)]), num_split_samp)
+	lag_T = min(switch_sign)
+	if(lag_T == num_split_samp){print(paste("T = ", num_split_samp))}
+	
+	neff = (num_chains*num_split_samp)/(1 + 2*sum(rho_hat_t[1:lag_T]))
+	
+	return(list(Rhat = Rhat, neff = neff))
+}
+
+
+
