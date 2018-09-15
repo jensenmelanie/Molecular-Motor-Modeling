@@ -20,7 +20,7 @@ row_to_list = function(matrix){
 
 
 every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
-	to_take_index = seq((ceiling(nrow(matrix)*burn_in_per) + 1), ceiling(nrow(matrix)), by = every_kth)
+	to_take_index = seq((ceiling(nrow(matrix)*burn_in_per) + every_kth), ceiling(nrow(matrix)), by = every_kth)
 	return(matrix[to_take_index,])
 }
 
@@ -30,13 +30,15 @@ every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
 ## log likelihoods functions
 ##-------------------------------------------------------------------
 
+
 ll_BMdrift = function(time, Xn, pars){
 	num_incr = length(Xn)-1
 	lambda = pars[1]; eta = pars[2]
 	
-	return((num_incr/2)*(log(eta) - log(2*pi)) - (1/2)*sum(log(diff(time))) - (eta/2)*sum((diff(Xn)) - lambda*diff(time)^2)/diff(time))
+	return((num_incr/2)*(log(eta) - log(2*pi)) - (1/2)*sum(log(diff(time))) - (eta/2)*sum((diff(Xn) - lambda*diff(time))^2)/diff(time))
 	
 }
+
 
 
 
