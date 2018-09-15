@@ -124,7 +124,7 @@ find_index_function = function(number, vector){
 ##----------------------------------------------------
 
 
-steppingOU_simulation = function(final_time, Delta, lambda, spring_const,sigma,simulation_time_step = 0.001, plot_it = FALSE){
+steppingOU_simulation = function(final_time, Delta, lambda, spring_const,D_const,simulation_time_step = 0.001, plot_it = FALSE){
 
 	time_step = simulation_time_step;
 	time_seq = seq(0, final_time, by = time_step)
@@ -148,7 +148,7 @@ steppingOU_simulation = function(final_time, Delta, lambda, spring_const,sigma,s
 Xn_EM = c(rnorm(n = 1, mean = Zn[1],sd = 0.001) )
 	
 for(n in 1:(length(Zn)-1)){
-	Xn_EM[n+1] = Xn_EM[n] - spring_const*(Xn_EM[n]- Zn[n])*time_step + sigma*sqrt(time_step)*rnorm(n = 1, mean =0, sd =1)
+	Xn_EM[n+1] = Xn_EM[n] - spring_const*(Xn_EM[n]- Zn[n])*time_step + sqrt(D_const*time_step)*rnorm(n = 1, mean =0, sd =1)
 }
 ##=============================================
 ##Using the exact solution and the fact we know the motor position for 0 <= t <=T_final
@@ -172,7 +172,7 @@ for( n in 1:(length(Zn)-1)){
 		dt_integral =sum(Z_continuous*(exp(-1*spring_const*(time_bds[2] - time_event_n)[-1]) - exp(-1*spring_const*(time_bds[2] - time_event_n)[-length(time_event_n)] )))
 		}
 	
-	OU_var = (sigma^2/(2*spring_const))*(1 - exp(-spring_const*time_step*2))
+	OU_var = (D_const/spring_const)*(1 - exp(-spring_const*time_step*2))
 	Xn_exact[n+1] = Xn_exact[n]*exp(-spring_const*time_step) + dt_integral + sqrt(OU_var)*rnorm(1, mean = 0, sd = 1)
 
 	} #end of the simulate Xn - the cargo process
@@ -211,7 +211,7 @@ return(list(time = obs_time, motor = obs_Zn, cargo = obs_Xn_exact, cargoEM = obs
 
 
 
-steppingOUswitch_simulation = function(final_time, Delta, lambda_vec, spring_const_vec, sigma_vec,switch_pts = c("uniform", 2), simulation_time_step = 0.001, plot_it = TRUE){
+steppingOUswitch_simulation = function(final_time, Delta, lambda_vec, spring_const_vec, D_vec,switch_pts = c("uniform", 2), simulation_time_step = 0.001, plot_it = TRUE){
 
 	time_step = simulation_time_step;
 	time_seq = seq(0, final_time, by = time_step)
@@ -251,12 +251,12 @@ if(length(spring_const_vec) == 1){
 	spring_const_vec = rep(spring_const_vec, num_switch +1)
 }
 
-if( length(sigma_vec) == 1){
-	sigma_vec = rep(sigma_vec, num_switch +1)
+if( length(D_vec) == 1){
+	D_vec = rep(D_vec, num_switch +1)
 }
 
 spring_const_state_vec = rep(spring_const_vec,times = diff(c(0, sim_switch_pt_index, length(time_seq))))
-sigma_state_vec = rep(sigma_vec,times = diff(c(0, sim_switch_pt_index, length(time_seq))))
+D_state_vec = rep(D_vec,times = diff(c(0, sim_switch_pt_index, length(time_seq))))
 
 switch_pt_state_vec = rep(c(1, sim_switch_pt_index),times = diff(c(0, sim_switch_pt_index, length(time_seq))))
 
@@ -266,7 +266,7 @@ switch_pt_state_vec = rep(c(1, sim_switch_pt_index),times = diff(c(0, sim_switch
 Xn_EM = c(rnorm(n = 1, mean = Zn[1],sd = 0.001) )
 	
 for(n in 1:(length(Zn)-1)){
-	Xn_EM[n+1] = Xn_EM[n] - spring_const_state_vec[n+1]*(Xn_EM[n]- Zn[n])*time_step + sigma_state_vec[n+1]*sqrt(time_step)*rnorm(n = 1, mean =0, sd =1)
+	Xn_EM[n+1] = Xn_EM[n] - spring_const_state_vec[n+1]*(Xn_EM[n]- Zn[n])*time_step + sqrt(D_state_vec[n+1])*sqrt(time_step)*rnorm(n = 1, mean =0, sd =1)
 }
 ##=============================================
 ##Using the exact solution and the fact we know the motor position for 0 <= t <=T_final
@@ -292,7 +292,7 @@ for( n in 1:(length(Zn)-1)){
 
 	switch_state_term = Xn_exact[switch_pt_state_vec[n+1]]*(1 - exp(-1*spring_const_state_vec[n+1]* simulation_time_step))
 	
-	OU_var = (sigma_state_vec[n+1]^2/(2*spring_const_state_vec[n+1]))*(1 - exp(-spring_const_state_vec[n+1]*time_step*2))
+	OU_var = (D_state_vec[n+1]/(spring_const_state_vec[n+1]))*(1 - exp(-spring_const_state_vec[n+1]*time_step*2))
 	Xn_exact[n+1] = Xn_exact[n]*exp(-spring_const_state_vec[n+1]*time_step) + dt_integral + sqrt(OU_var)*rnorm(1, mean = 0, sd = 1)
 
 	} #end of the simulate Xn - the cargo process
