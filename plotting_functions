@@ -1,4 +1,15 @@
+library(RColorBrewer)
+mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
 
+get_colors = function(num_colors){
+	my_colors = mellow.color.pal(num_colors +2)
+	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
+		my_colors = my_colors[- which(my_colors == "#FFFFBF")]
+	}else{
+		my_colors = my_colors[1:(num_colors +1)]
+	}
+	return(my_colors)
+} 
 
 ##===============================================================
 ## Plotting for posterior samples of an MCMC algorithm where 
