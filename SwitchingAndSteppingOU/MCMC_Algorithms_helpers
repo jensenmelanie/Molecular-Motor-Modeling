@@ -142,8 +142,6 @@ for(st in 1:num_switches){
 
 
 
-
-
 } # End of the iterations loop
 
 
@@ -173,9 +171,9 @@ all_post = list()
 
 all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
 
-lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))))
-eta_violin = plot_post_violin(log10(all_chains[[1]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))))
-tau_violin = plot_post_violin(all_chains[[1]]$post_samp$tau*Delta, parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta))
+lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
+eta_violin = plot_post_violin(log10(all_chains[[1]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),, every_kth = every_kth)
+tau_violin = plot_post_violin(all_chains[[1]]$post_samp$tau*Delta, parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta),every_kth = every_kth)
 grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
 
 
@@ -191,9 +189,9 @@ for( m in 2:num_chains){
 	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
 	all_post[[m]] = all_chains[[m]]$post_samp
 	
-	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))))
-	eta_violin = plot_post_violin(log10(all_chains[[m]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))))
-	tau_violin = plot_post_violin(all_chains[[m]]$post_samp$tau*Delta, parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta))
+	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
+	eta_violin = plot_post_violin(log10(all_chains[[m]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),every_kth = every_kth)
+	tau_violin = plot_post_violin(all_chains[[m]]$post_samp$tau*Delta, parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta), every_kth = every_kth)
 	grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
 
 
@@ -209,7 +207,7 @@ print(initial_taus)
 
 
 ##-------------------------------------------
-## Rhat Values
+##Convergence statistics (Rhat and neff)
 ##-------------------------------------------
 
 parnames = names(all_post[[1]])
@@ -217,7 +215,12 @@ Rhat_values = matrix(nrow = length(parnames), ncol = num_switches +1)
 rownames(Rhat_values) = parnames
 colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
 
-every_kth_seq = seq(ceiling(iterations*warmup_per)+1, iterations, by = every_kth)
+neff_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(neff_values) = parnames
+colnames(neff_values) = paste("state",1:(num_switches +1), sep = '')
+
+
+sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
 
 pp = 0
 for(pn in parnames){
@@ -225,16 +228,21 @@ for(pn in parnames){
 	pp = pp + 1
 	for (st in 1:num_states){
 		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = iterations, ncol = num_chains)
-		chain_mat  = chain_mat[every_kth_seq,] 
+		chain_mat  = chain_mat[sampling_seq,] 
 		
-		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
+		conv_stats = convergence_stats_fnc(chain_mat)
+		
+		Rhat_values[pp,st] = conv_stats$Rhat
+		neff_values[pp,st] = conv_stats$neff
+		
 		}
 		
 } # End of the parameter loops
-
+print("Potential Scale Reduction Factor")
 print(Rhat_values)
-
-return(list(chain_output= all_chains,Rhat =  Rhat_values,init_tau = initial_taus))
+print("Number of Effective Samples")
+print(neff_values)
+return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values,init_tau = initial_taus))
 
 } #End of the function
 
@@ -317,19 +325,76 @@ ll_switch_interval = function(time, Xn, taus, lambdas, etas){
 
 Rhat_fnc = function(post_matrix){
 	num_samples  = nrow(post_matrix)
-	num_chains  = ncol(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
 
-	chain_mean = apply(post_matrix, 2, mean)
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
 	grand_mean = mean(post_matrix)
 
-	Between_var = (num_samples/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
 	
-	Within_var = mean(apply(post_matrix, 2, var)^2)
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
 	
-	Var_est = ((num_samples-1)/num_samples)*Within_var + (1/num_samples)*Between_var
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
 	
 	return(sqrt(Var_est/ Within_var))
 }
+
+
+
+variogram_fnc = function(post_matrix, lag_t){
+	num_chains = ncol(post_matrix)
+	num_lags =nrow(post_matrix) - lag_t
+	return((1/num_chains)*(1/num_lags)*sum(apply(post_matrix, 2,diff, lag = lag_t)^2))	
+}
+
+
+convergence_stats_fnc = function(post_matrix){
+	
+## To calculate the variance of the samples	
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+
+
+## Rhat Statistic	
+	Rhat = sqrt(Var_est/ Within_var)	
+	
+## N effective
+	
+	rho_hat_t = 1-(sapply(1:num_split_samp, variogram_fnc, post_matrix = post_matrix)/(2*Var_est))
+	
+	switch_sign = which(sign(rho_hat_t)[1:(num_split_samp-1)] != sign(rho_hat_t)[2:(num_split_samp)])
+	lag_T = switch_sign[min(which(switch_sign %% 2==1))]
+	
+	neff = (num_chains*num_split_samp)/(1 + 2*sum(rho_hat_t[1:lag_T]))
+	
+	return(list(Rhat = Rhat, neff = neff))
+}
+
+
+
 
 
 
