@@ -77,7 +77,7 @@ for( m in 2:num_chains){
 	
 lambda_violin = plot_post_violin(matrix(all_chains[[m]]$post_samp$lambda, ncol = 1), parname= c(paste("lambda", 1)), every_kth = every_kth, warmup = warmup_per)
 eta_violin = plot_post_violin(matrix(log10(all_chains[[m]]$post_samp$eta), ncol = 1), parname= c(paste("log10eta", 1)), every_kth = every_kth, warmup = warmup_per)
- grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+ grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob(paste("Chain ",m),gp = gpar(fontsize = 18)))
 
 
 }
