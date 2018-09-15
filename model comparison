@@ -1,16 +1,6 @@
 ## Model Comparison Functions 
 
 
-MAP_est = function(post_samp, every_kth=1, warmup= 0.5){
-	num_samp = length(post_samp)
-	
-	every_kth_seq = seq(ceiling(warmup*num_samp)+ every_kth, num_samp, every_kth)
-	
-	post_samp_k = post_samp[every_kth_seq]
-	possible_values = sort(unique(post_samp_k))
-	return(possible_values[which.max(summary(as.factor(post_samp_k)))])		
-}
-
 ##============================================================
 ## Helper functions  
 ##============================================================
@@ -41,7 +31,6 @@ ll_BMdrift = function(time, Xn, pars){
 
 
 
-
 ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 	num_incr = length(Xn) -1
 	num_switch = length(taus); num_states = num_switch + 1
@@ -63,9 +52,21 @@ ll_BMdrift_switch = function(time, Xn, taus, lambdas, etas){
 
 
 
+
+
+eta_mle_function = function(time, Xn, lambda){
+	Delta = diff(time)[1]; Xincr = diff(Xn)
+	
+	sigma_sq = (length(Xincr)*Delta)^(-1)*sum((Xincr - lambda*Delta)^2)
+	return(1/sigma_sq)
+}
+
+#eta_mle_function(time, Xn[93:151], 100)
+
 ##============================================================
 ## Model Comparison Functions
 ##============================================================
+
 
 ##-------------------------------------------------------------------
 ##Posterior Bayes Score
