@@ -250,6 +250,7 @@ grid.arrange( lambda_plot,tau_plot, eta_plot, layout_matrix = rbind(c(1,1,3),c(2
 ##---------------------------------
 ##Plot of a trajectoy that switches state
 ##--------------------------------
+
 plot_traj_switch = function(time, Xn, tau_est_index){
 	
 	if(length(which(diff(tau_est_index) < 0))>0){
@@ -257,19 +258,30 @@ plot_traj_switch = function(time, Xn, tau_est_index){
 		print("Tau estimates are not in increasing order, figure made with sorted estimates")
 	}
 	
-	
 	num_states = length(tau_est_index) + 1
 	num_obs = length(time)
 	
 	my_colors = get_colors(num_states)
-
 	
+	connect_index = sort(c(tau_est_index, tau_est_index + 1))
 	state_index = rep(1:num_states, times =  diff(c(0, tau_est_index, num_obs)) )
 	traj_df = data.frame(time = time, Xn = Xn, state = state_index)
 	
 	tau_est_df = data.frame(time = time[tau_est_index], Xn = Xn[tau_est_index])
+	connect_df = data.frame(time = time[connect_index], Xn = Xn[connect_index], state = sort(rep(2:num_states, each = 2)) )
 	
-	ggplot(data = traj_df, aes(x = time, y = Xn,color = factor(state))) +geom_path() + geom_point(data = tau_est_df, aes(x = time, y = Xn , colour = as.factor(1:(num_states-1))), show.legend = F)+labs(color = "State Index", x = "Time", y = "Position")+ggtitle(paste("Assuming k =",num_states-1,"switch points"))+scale_color_manual(values = my_colors, guide = F)
+	ggplot(data = traj_df, aes(x = time, y = Xn,color = factor(state))) +geom_path() + geom_path(data =connect_df, aes(x = time, y = Xn))+geom_point(data = tau_est_df, aes(x = time, y = Xn , colour = as.factor(1:(num_states-1))), show.legend = F)+labs(color = "State Index", x = "Time", y = "Position")+ggtitle(paste("Assuming k =",num_states-1,"switch points"))+scale_color_manual(values = my_colors, guide = F)
+	
+}
+
+##---------------------------------
+##Plot of a trajectoy
+##--------------------------------
+
+plot_traj_noswitch = function(time, Xn){
+	
+	traj_df = data.frame(time = time, Xn = Xn)
+	ggplot(data = traj_df, aes(x = time, y = Xn) +geom_path() +labs(x = "Time", y = "Position")+ggtitle("Assuming k = 0 switch points")
 	
 }
 
