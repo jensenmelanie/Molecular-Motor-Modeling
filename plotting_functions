@@ -252,6 +252,12 @@ grid.arrange( lambda_plot,tau_plot, eta_plot, layout_matrix = rbind(c(1,1,3),c(2
 ##--------------------------------
 plot_traj_switch = function(time, Xn, tau_est_index){
 	
+	if(length(which(diff(tau_est_index) < 0))>0){
+		tau_est_index = sort(tau_est_index)
+		print("Tau estimates are not in increasing order, figure made with sorted estimates")
+	}
+	
+	
 	num_states = length(tau_est_index) + 1
 	num_obs = length(time)
 	
