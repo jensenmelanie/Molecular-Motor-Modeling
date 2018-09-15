@@ -1,6 +1,8 @@
 library(RColorBrewer)
 mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
-
+##===============================================================
+## Helper functions
+##===============================================================
 get_colors = function(num_colors){
 	my_colors = mellow.color.pal(num_colors +2)
 	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
@@ -10,6 +12,16 @@ get_colors = function(num_colors){
 	}
 	return(my_colors)
 } 
+
+MAP_est = function(post_samp, every_kth=1, warmup= 0.5){
+	num_samp = length(post_samp)
+	
+	every_kth_seq = seq(ceiling(warmup*num_samp)+ every_kth, num_samp, every_kth)
+	
+	post_samp_k = post_samp[every_kth_seq]
+	possible_values = sort(unique(post_samp_k))
+	return(possible_values[which.max(summary(as.factor(post_samp_k)))])		
+}
 
 ##===============================================================
 ## Plotting for posterior samples of an MCMC algorithm where 
@@ -257,6 +269,7 @@ plot_traj_switch = function(time, Xn, tau_est_index){
 
 ##---------------------------------
 ##Posterior Sample Violin plots eta/lambda vs tau
+##requires map function
 ##--------------------------------
 plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup = 0.5){
 	par2_post = post_samp[[par2_name]]
