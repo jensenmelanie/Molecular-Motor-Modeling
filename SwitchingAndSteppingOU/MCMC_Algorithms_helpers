@@ -54,7 +54,7 @@ initial_eta = rgamma(n = num_states, shape = .1, rate = .1)
 post_samp$eta[1,] = initial_eta
 
 cand_var_tau = ceiling(length(mydata$Xn)*cand_tau_step_per)
-
+if(length(cand_var_tau) == 1){cand_var_tau = rep(cand_var_tau, num_switches)}
 
 
 ##---------------------------------------------------------------------
@@ -107,7 +107,7 @@ for(st in 1:num_switches){
 	
 	tau_loop_vec = tau_vec_it[st:(st+2)]
 
-	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau)
+	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau[st])
 	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
 	
 	 overlapping_indicator = as.numeric(cand_tau<= (tau_loop_vec[1]+1) ) + as.numeric(cand_tau >= (tau_loop_vec[3]-1)) + as.numeric(cand_tau <= 2) + as.numeric(cand_tau >= (num_obs-1))
@@ -165,6 +165,9 @@ return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initi
 
 BMdrift_switch_chains = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
 
+sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
+
+
 all_chains = list()
 all_post = list()
 
@@ -182,11 +185,13 @@ grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,
 
 all_post[[1]] = all_chains[[1]]$post_samp
 initial_taus = all_chains[[1]]$initial_tau
-
+accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
 
 for( m in 2:num_chains){
 	all_chains[[m]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'random', cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
 	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
+	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
+	
 	all_post[[m]] = all_chains[[m]]$post_samp
 	
 	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
@@ -203,9 +208,12 @@ names(all_post) = paste("chain", 1:num_chains, sep = '')
 
 colnames(initial_taus) = paste('tau', 1:num_switches, sep = '')
 rownames(initial_taus) = names(all_post)
-print(initial_taus)
+#print(initial_taus)
 
-
+colnames(accept_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(accept_taus) = paste("chain", 1:num_chains, sep = '')
+print("Acceptance Rate for tau")
+print(accept_taus)
 ##-------------------------------------------
 ##Convergence statistics (Rhat and neff)
 ##-------------------------------------------
@@ -220,7 +228,6 @@ rownames(neff_values) = parnames
 colnames(neff_values) = paste("state",1:(num_switches +1), sep = '')
 
 
-sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
 
 pp = 0
 for(pn in parnames){
@@ -238,11 +245,11 @@ for(pn in parnames){
 		}
 		
 } # End of the parameter loops
-print("Potential Scale Reduction Factor")
+print("Potential Scale Reduction Factor (< 1.1)")
 print(Rhat_values)
-print("Number of Effective Samples")
+print("Number of Effective Samples (> 5*2*num_chains)")
 print(neff_values)
-return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values,init_tau = initial_taus))
+return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values,init_tau = initial_taus, acceptance_tau = accept_taus))
 
 } #End of the function
 
@@ -318,7 +325,6 @@ ll_switch_interval = function(time, Xn, taus, lambdas, etas){
 
 
 
-
 ##-----------------------------------------------------
 ## Convergence Statistic
 ##-----------------------------------------------------
@@ -385,8 +391,9 @@ convergence_stats_fnc = function(post_matrix){
 	
 	rho_hat_t = 1-(sapply(1:num_split_samp, variogram_fnc, post_matrix = post_matrix)/(2*Var_est))
 	
-	switch_sign = which(sign(rho_hat_t)[1:(num_split_samp-1)] != sign(rho_hat_t)[2:(num_split_samp)])
-	lag_T = switch_sign[min(which(switch_sign %% 2==1))]
+	switch_sign = c(which(sign(rho_hat_t)[1:(num_split_samp-1)] != sign(rho_hat_t)[2:(num_split_samp)]), num_split_samp)
+	lag_T = min(switch_sign)
+	if(lag_T == num_split_samp){print(paste("T = ", num_split_samp))}
 	
 	neff = (num_chains*num_split_samp)/(1 + 2*sum(rho_hat_t[1:lag_T]))
 	
