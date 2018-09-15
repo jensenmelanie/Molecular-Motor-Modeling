@@ -224,5 +224,83 @@ grid.arrange( lambda_plot,tau_plot, eta_plot, layout_matrix = rbind(c(1,1,3),c(2
 	
 } #End of function
 
+##---------------------------------
+##Plot of a trajectoy that switches state
+##--------------------------------
+plot_traj_switch = function(time, Xn, tau_est_index){
+	
+	num_states = length(tau_est_index) + 1
+	num_obs = length(time)
+	
+	my_colors = get_colors(num_states)
+
+	
+	state_index = rep(1:num_states, times =  diff(c(0, tau_est_index, num_obs)) )
+	traj_df = data.frame(time = time, Xn = Xn, state = state_index)
+	
+	tau_est_df = data.frame(time = time[tau_est_index], Xn = Xn[tau_est_index])
+	
+	ggplot(data = traj_df, aes(x = time, y = Xn,color = factor(state))) +geom_path() + geom_point(data = tau_est_df, aes(x = time, y = Xn , colour = as.factor(1:(num_states-1))), show.legend = F)+labs(color = "State Index", x = "Time", y = "Position")+ggtitle(paste("Assuming k =",num_states-1,"switch points"))+scale_color_manual(values = my_colors, guide = F)
+	
+}
+
+##---------------------------------
+##Posterior Sample Violin plots eta/lambda vs tau
+##--------------------------------
+plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup = 0.5){
+	par2_post = post_samp[[par2_name]]
+	tau_post = post_samp[['tau']]
+	num_obs = length(time)
+
+	num_states = ncol(par2_post); num_switches = num_states -1
+	num_samp = nrow(par2_post)
+	every_kth_seq = seq(ceiling(warmup*num_samp)+ every_kth, num_samp, every_kth)
+	num_ksamp = length(every_kth_seq)
+	
+
+	if(num_states == 2){
+		tau_post = tau_post[every_kth_seq]
+		tau_map = MAP_est(tau_post, warmup = 0, every_kth = 1)
+	}else{
+		tau_post = tau_post[every_kth_seq, ]
+		tau_map = apply(tau_post, 2, MAP_est)	
+	}
+	
+	par2_pos = time[round(diff(c(1, tau_map, num_obs))/2) + c(0, tau_map)]	
+	par2_df = data.frame(state = rep(1:num_states, each = num_ksamp), value = c(par2_post[every_kth_seq,]), xpos = rep(par2_pos, each = num_ksamp) )
+	par2_range = range(c(par2_post[every_kth_seq,]))
+	par2_range[1] = par2_range[1]- par2_range[2]*0.25
+	
+	tau_y = max(0, par2_range[1])
+	tau_df =data.frame(state = rep(1:num_switches, each = num_ksamp), value = time[tau_post], ypos = rep(tau_y,length(c(tau_post))))
+	tau_map_df = data.frame(ypos = rep(tau_y, num_switches), value = time[tau_map], state = 1:num_switches)
+	
+	my_colors = get_colors(num_states)
+	
+	if(par2_name == 'lambda'){
+		ylabel = expression(paste("Stepping Rate ",lambda))
+	}else if(par2_name == "eta"){
+		ylabel = expression(paste("Inverse Noise ",eta))
+	}else{ylabel = "parname"}
+	
+	time_limit = range(time)
+	time_limit[2] = time_limit[2]+ time_limit[2]*0.1
+	time_limit[1] = time_limit[1]- time_limit[2]*0.1
+	
+	#ggplot(data = par2_df,aes(x = xpos, y = value, fill = as.factor(state)) ) + geom_violin()+ylim(par2_range) + xlim(time_limit)+geom_violin(data = tau_df, aes(x = value, y = ypos)) + xlab(expression(paste("Switch Point ",tau ))) + ylab(ylabel) +  geom_point(data = tau_map_df, aes(y = ypos, x = value), shape = 8,color = my_colors[1:num_switches], show.legend = F) + geom_vline(aes(xintercept = max(time)),linetype = "dashed", color = 'navy') + geom_vline(aes(xintercept =min(time)),linetype = "dashed", color = 'navy') + scale_fill_manual(values = my_colors, guide = FALSE) + ggtitle(paste("Number switches = ", num_switches))#, labels = paste("Index", 1:num_states), name = "") 
+
+	ggplot(data = par2_df,aes(x = xpos, y = value, fill = as.factor(state)) ) + geom_violin()+ylim(par2_range) + xlim(time_limit) + xlab(expression(paste("Switch Point ",tau ))) + ylab(ylabel) +  geom_point(data = tau_map_df, aes(y = ypos, x = value), shape = 8,color = my_colors[1:num_switches], show.legend = F) + geom_vline(aes(xintercept = max(time)),linetype = "dashed", color = 'navy') + geom_vline(aes(xintercept =min(time)),linetype = "dashed", color = 'navy') + scale_fill_manual(values = my_colors, guide = FALSE) + geom_count(data = tau_df, aes(x = value, y = ypos, color = as.factor(state)), show.legend = F) + scale_color_manual(values = my_colors[1:num_switches], guide = F) + ggtitle(paste("Number switches k = ", num_switches))#, labels = paste("Index", 1:num_states), name = "") 
+	
+}
+
+##---------------------------------
+##plot of Posterior Bayes
+##--------------------------------
+plot_PBS = function(num_switches, PBS){
+	PBS_df = data.frame(switch = num_switches, PBS = PBS)
+	
+	ggplot(PBS_df, aes(x = switch, y = PBS)) + geom_path() + geom_point(size = 2) + xlab("Number of Switches Assumed") + ylab("log10(PBS)") + ggtitle("Post Bayes Score") + scale_x_continuous(breaks  = num_switches)
+	
+}
 
 
