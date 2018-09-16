@@ -15,6 +15,30 @@ every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
 }
 
 
+##============================================================
+## Posterior Mean
+##============================================================
+
+post_mean_fnc = function(post_samp, every_kth = 1, warmup = 0.5){
+	if(is.matrix(post_samp)== FALSE){
+		message = "Post samples need to be in a matrix"
+		stop(message)
+	}else{
+	
+	sampling_seq =  seq((ceiling(nrow(post_samp)*warmup) + every_kth), nrow(post_samp), by = every_kth)
+
+	if(ncol(post_samp) == 1){
+		post_samp_k = matrix(post_samp[sampling_seq], ncol = 1)
+	}else{post_samp_k = post_samp[sampling_seq, ]}
+	
+	
+	return(apply(post_samp_k, 2, mean))
+	
+	}#end of checking to see if a matrix
+	
+}
+
+
 
 ##-------------------------------------------------------------------
 ## log likelihoods functions
