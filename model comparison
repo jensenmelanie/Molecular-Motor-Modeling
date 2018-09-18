@@ -41,21 +41,18 @@ post_mean_fnc = function(post_samp, every_kth = 1, warmup = 0.5){
 ## Posterior MAP
 ##============================================================
 
+
 MAP_est = function(post_samp, every_kth=1, warmup= 0.5){
 	num_samp = length(post_samp)
 	
 	every_kth_seq = seq(ceiling(warmup*num_samp)+ every_kth, num_samp, every_kth)
 	
 	post_samp_k = post_samp[every_kth_seq]
-	possible_values = sort(unique(post_samp_k))
+	possible_values = unique(post_samp_k)
 	
-	char_value = names(which.max(summary(as.factor(post_samp_k))))
-	if(char_value == "(Other)"){
-		return(NA)
-		}else{
-	return(as.numeric(as.numeric(char_value)))}	
-	
+	return(possible_values[which.max(tabulate(match(post_samp_k, possible_values)))])
 }
+
 
 ##-------------------------------------------------------------------
 ## log likelihoods functions
