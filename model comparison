@@ -48,9 +48,12 @@ MAP_est = function(post_samp, every_kth=1, warmup= 0.5){
 	every_kth_seq = seq(ceiling(warmup*num_samp)+ every_kth, num_samp, every_kth)
 	
 	post_samp_k = post_samp[every_kth_seq]
-	possible_values = unique(post_samp_k)
 	
-	return(possible_values[which.max(tabulate(match(post_samp_k, possible_values)))])
+	den_est = density(post_samp_k)
+	return(den_est$x[which.max(den_est$y)])
+	
+	#possible_values = unique(post_samp_k)
+	#return(possible_values[which.max(tabulate(match(post_samp_k, possible_values)))])
 }
 
 
