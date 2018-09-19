@@ -1,0 +1,128 @@
+##Obtaining the transverse and longitudial direction
+	#position_data: matrix where the first column is the time sequence, second column 	is the x position, third column is the y position
+
+x_rel_label = "Relative x position"
+y_rel_label = "Relative y position"
+time_label = "Time (s)"
+
+
+###===================================================
+##Projection function
+###===================================================
+
+projection_function = function(time_seq, Xn, Yn, plot_it = TRUE){
+
+	est_r = mean(atan2(Yn, Xn))
+if(abs(est_r) >= pi/4 && abs(est_r) <= 3*pi/4   ){
+	response_var = Xn; predictor_var = Yn
+	response_lab = expression(paste("Relative X Position (", mu, "m)") )
+	predictor_lab = expression(paste("Relative Y Position (", mu, "m)"))
+	perm_index = c(2,1)
+	} else{
+	response_var = Yn; predictor_var = Xn 
+	response_lab = expression(paste("Relative Y Position (", mu, "m)") )
+	predictor_lab = expression(paste("Relative X Position (", mu, "m)"))
+	perm_index = c(1,2)
+	}
+
+
+
+my_lm = lm(response_var ~ predictor_var)
+my_coef = my_lm$coef
+shifted_response = response_var - my_coef[1]
+
+pt_on_line = c(max(abs(predictor_var)), max(abs(predictor_var))*(my_coef[2]))
+unit_vec = pt_on_line/(sqrt(sum(pt_on_line^2)))
+
+long_dir = unit_vec[1]*predictor_var + unit_vec[2]*shifted_response
+
+
+trans_dir = sign(shifted_response -predictor_var*my_coef[2])*sqrt((shifted_response^2 + predictor_var^2) - long_dir^2)
+
+if(plot_it == TRUE){
+sq_limits = c(-1,1)*max(abs(c(predictor_var, shifted_response, long_dir)))
+plot(predictor_var, shifted_response, xlim = sq_limits, ylim = sq_limits, xlab = predictor_lab, ylab = response_lab, type = "l")
+abline(a = 0, b = my_coef[2], col = "slateblue3")
+plot(time_seq, long_dir,ylim = sq_limits, type = "l", lwd = 2, ylab = expression(paste("Position (", mu, "m)")), xlab = "Time (seconds)")
+#lines(time_seq, predictor_var, col = "springgreen3")
+#lines(time_seq, shifted_response, col = "dodgerblue3")
+lines(time_seq, trans_dir, col = "springgreen3",lty = 1)
+legend("bottom", legend = c("Longitudinal", "Transverse"), lty = 1, lwd = c(2,1), col = c("black", "springgreen3"))
+
+#legend("bottom", legend = c("Longitudinal", predictor_lab, response_lab), lty = 1, lwd = c(2,1,1), col = c("black", "springgreen3", "dodgerblue3"))
+}
+
+unit_vec = unit_vec[perm_index]
+angle_est = atan2(unit_vec[2], unit_vec[1])
+
+
+
+to_be_returned = list(my_coef, long_dir,trans_dir, unit_vec, angle_est)
+names(to_be_returned) = c("Line_parameters", "Long_dir", "trans_dir","Unit_vec", "Angle_est")
+return(to_be_returned)
+
+
+
+}
+
+###===================================================
+##PLots the (x,y) position and the color dentoes the time
+###===================================================
+
+
+position_plot = function(x1, y1, incr_num = 5){
+	
+ryg.palette = colorRampPalette(c("green", "orange", "firebrick"), space = "rgb")
+
+ryg.colors = ryg.palette(incr_num)
+
+path_length = length(x1)
+
+incr = round(path_length/incr_num)	
+	
+dir_k =c(-1,1)*max(abs(range(x1,y1)))
+
+plot(x1,y1, type = "l", xlab = expression(paste("X position (", mu, "m)")), ylab = expression(paste("Y position (", mu, "m)")),, col = ryg.colors[1], xlim = dir_k, ylim = dir_k)
+for(kk in 2:(incr_num-1)){
+	lines(x1[(incr*(kk-1)):(kk*incr)], y1[(incr*(kk-1)):(kk*incr)], col = ryg.colors[kk])	
+}
+lines(x1[(incr*kk):(path_length)], y1[(incr*kk):(path_length)], col = ryg.colors[kk+1])	
+
+
+points(x1[1], y1[1], pch = 16, col = "green")
+points(x1[path_length], y1[path_length], pch = 16, col = "red")
+title(sub = paste("Path Length",path_length ))
+	
+	
+}
+
+
+
+library(RColorBrewer)
+mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
+
+
+
+##Plotting Labels
+
+time_label = "Time (s)"
+trans_label = expression(paste("Transverse Direction (",mu,"m)"))
+long_label = expression(paste("Longitudinal  Direction (",mu,"m)"))
+x_rel_label = expression(paste("Relative x Direction (",mu,"m)"))
+y_rel_label = expression(paste("Relative y Direction (",mu,"m)"))
+x_label = expression(paste("X Direction (",mu,"m)"))
+y_label = expression(paste("Y Direction (",mu,"m)"))
+
+
+##Parameter Labels
+
+kg_label = expression(kappa/gamma)
+D_label = expression(paste("D (", mu, m^2, "/s)"))
+nu_label = expression(paste(nu , " (", mu, "m/s" , ")"))
+tau_label = expression(tau)
+
+
+log_label = as.character(10^(-2:2))
+kg_log_label = c(expression(10^-2), expression(10^-1.5),expression(10^-1), expression(10^-.5), expression(10^0),expression(10^.5), expression(10^1), expression(10^1.5), expression(10^2)) 
+
+
