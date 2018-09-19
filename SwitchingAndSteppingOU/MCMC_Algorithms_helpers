@@ -176,7 +176,7 @@ all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',c
 
 lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
 eta_violin = plot_post_violin(log10(all_chains[[1]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),, every_kth = every_kth)
-tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[1]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta),every_kth = every_kth)
+tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[1]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time),every_kth = every_kth)
 grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
 
 
@@ -196,7 +196,7 @@ for( m in 2:num_chains){
 	
 	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
 	eta_violin = plot_post_violin(log10(all_chains[[m]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),every_kth = every_kth)
-	tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[m]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = c(0, length(mydata$Xn)*Delta), every_kth = every_kth)
+	tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[m]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time), every_kth = every_kth)
 	grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
 
 
