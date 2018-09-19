@@ -340,12 +340,12 @@ plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup
 }
 
 ##---------------------------------
-##plot of Posterior Bayes
+##plot of Posterior Bayes or Expected log likelihood (wrt to posterior
 ##--------------------------------
-plot_PBS = function(num_switches, PBS){
+plot_PBS = function(num_switches, PBS, title){
 	PBS_df = data.frame(switch = num_switches, PBS = PBS)
 	
-	ggplot(PBS_df, aes(x = switch, y = PBS)) + geom_path() + geom_point(size = 2) + xlab("Number of Switches Assumed") + ylab("log10(PBS)") + ggtitle("Post Bayes Score") + scale_x_continuous(breaks  = num_switches)
+	ggplot(PBS_df, aes(x = switch, y = PBS)) + geom_path() + geom_point(size = 2) + xlab("Number of Switches Assumed") + ylab("log10(Score)") + ggtitle(title) + scale_x_continuous(breaks  = num_switches)
 	
 }
 
