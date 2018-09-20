@@ -1,4 +1,162 @@
 
+library(grid)
+library(gridExtra)
+library(ggplot2)
+
+
+ 
+##================================================
+## Algorithm Function
+##=================================================
+ 
+ 
+BMdrift_switch_inf = function(mydata, num_switches,init_tau = 'uniform', cand_tau_step_per = 0.05,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
+
+num_obs = length(mydata$time)
+num_states = num_switches + 1
+##---------------------------------------------------------------------
+## Storing the posterior samples
+##---------------------------------------------------------------------
+
+
+post_samp = list()
+post_samp$lambda = matrix(nrow = iterations, ncol = num_states)
+post_samp$eta = matrix(nrow = iterations, ncol = num_states)
+post_samp$tau = matrix(nrow = iterations, ncol = num_switches)
+
+overlapping_intervals= matrix(nrow = iterations, ncol = num_switches)
+accept_rates = matrix(nrow = iterations, ncol = num_switches)
+
+##---------------------------------------------------------------------
+## Initializing
+##---------------------------------------------------------------------
+if(init_tau == 'uniform'){
+	initial_tau = floor(length(mydata$time)*(1:num_switches)/(num_states))
+	post_samp$tau[1,] = initial_tau
+}else{
+	
+	first_half = 3:floor((num_obs-2)*0.5)
+	second_half = (floor((num_obs-2)*0.5)+1):(num_obs-2)
+	
+	possible_switches = c(sample(first_half, ceiling(num_switches/2)),sample(second_half, ceiling(num_switches/2)))
+	
+	initial_tau = sort(possible_switches[sample(1:length(possible_switches), num_switches)])
+
+	post_samp$tau[1,] = initial_tau
+}
+
+
+
+initial_lambda = rnorm(n = num_states, mean  =2, sd =1)
+post_samp$lambda[1,] = initial_lambda
+
+initial_eta = rgamma(n = num_states, shape = .1, rate = .1)
+post_samp$eta[1,] = initial_eta
+
+cand_var_tau = ceiling(length(mydata$Xn)*cand_tau_step_per)
+if(length(cand_var_tau) == 1){cand_var_tau = rep(cand_var_tau, num_switches)}
+
+
+##---------------------------------------------------------------------
+## Sampling
+##---------------------------------------------------------------------
+
+for( it in 2:iterations){
+
+tau_index_vec = c(1,post_samp$tau[it-1,], num_obs)
+state_list = list()
+Delta_n_st = list()
+Xincr_st = list()
+
+
+for(st in 1:num_states){
+	state_list[[st]] = (tau_index_vec[st]): tau_index_vec[st+1]	
+	Delta_n_st[[st]] = diff(mydata$time[state_list[[st]]])
+	Xincr_st[[st]] = diff(mydata$Xn[state_list[[st]]])
+	}
+
+
+
+num_obs_st = diff(tau_index_vec)
+
+##-----------------------------eta block-----------------------------
+eta_post_alpha = num_obs_st/2 #+ mydata$hyper_eta[1,]
+eta_post_beta = c()
+
+for(st in 1:num_states){
+	eta_post_beta[st] = (1/2)*sum((diff(mydata$Xn[state_list[[st]]]) - post_samp$lambda[it-1,st]*Delta_n_st[[st]])^2/Delta_n_st[[st]])
+}
+
+
+post_samp$eta[it,] = unlist(lapply(col_to_list(rbind(eta_post_alpha,eta_post_beta)), rgamma_list,n = 1))
+
+##-----------------------------lambda block-----------------------------
+
+
+## Jeffreys prior (ie flat on lambda)
+lambda_post_var = (unlist(lapply(Delta_n_st,sum))*post_samp$eta[it,])^(-1)
+lambda_post_mean = unlist(lapply(Xincr_st, sum))/unlist(lapply(Delta_n_st,sum))
+
+post_samp$lambda[it,] = unlist(lapply(col_to_list(rbind(lambda_post_mean,lambda_post_var)), rnorm_list, n = 1))
+
+
+##-----------------------------tau block-----------------------------
+tau_vec_it = c(1, post_samp$tau[it-1,], num_obs)
+
+for(st in 1:num_switches){
+	
+	tau_loop_vec = tau_vec_it[st:(st+2)]
+
+	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau[st])
+	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
+	
+	 overlapping_indicator = as.numeric(cand_tau<= (tau_loop_vec[1]+1) ) + as.numeric(cand_tau >= (tau_loop_vec[3]-1)) + as.numeric(cand_tau <= 2) + as.numeric(cand_tau >= (num_obs-1))
+	
+	if( overlapping_indicator > 0){
+		ratio = 0; overlapping_intervals[it, st] = 1
+	}else{
+	
+		switch_lambdas = post_samp$lambda[it,c(st,st+1)]; 
+		switch_etas = post_samp$eta[it,c(st,st+1)]
+		
+
+		log_like_ratio = ll_switch_interval(mydata$time, mydata$Xn, cand_tau_vec, switch_lambdas, switch_etas) - ll_switch_interval(mydata$time,mydata$Xn, tau_loop_vec, switch_lambdas, switch_etas)
+				
+		ratio = exp(log_like_ratio)	
+		
+	} #End of get the ratio
+	
+	
+	accept_fnc_tau = min(1, ratio)
+	
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_tau){
+		post_samp$tau[it, st] = cand_tau; accept_rates[it,st] = 1
+		tau_vec_it[st+1] = cand_tau
+	}else {
+		post_samp$tau[it, st] = post_samp$tau[it-1,st]; accept_rates[it,st] = 0
+	}
+
+	
+} # End of the tau loop
+
+
+
+} # End of the iterations loop
+
+
+
+return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initial_tau))
+
+
+
+
+} #End of the function
+
+
+
+
+
 ##=============================================
 ## Algorithm for Multiple Chains
 ##=============================================
@@ -16,12 +174,14 @@ all_post = list()
 
 all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
 
-if(plot_it == TRUE){
 lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
 eta_violin = plot_post_violin(log10(all_chains[[1]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),, every_kth = every_kth)
-tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[1]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time),every_kth = every_kth)
+tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[1]]$post_samp$tau], ncol = num_switches), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time),every_kth = every_kth)
 grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
-}
+
+
+
+
 
 all_post[[1]] = all_chains[[1]]$post_samp
 initial_taus = all_chains[[1]]$initial_tau
@@ -34,12 +194,11 @@ for( m in 2:num_chains){
 	
 	all_post[[m]] = all_chains[[m]]$post_samp
 	
-	if(plot_it == TRUE){
 	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
 	eta_violin = plot_post_violin(log10(all_chains[[m]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),every_kth = every_kth)
-	tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[m]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time), every_kth = every_kth)
+	tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[m]]$post_samp$tau],ncol = num_switches), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time), every_kth = every_kth)
 	grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
-	}
+
 
 }
 
@@ -64,11 +223,6 @@ Rhat_values = matrix(nrow = length(parnames), ncol = num_switches +1)
 rownames(Rhat_values) = parnames
 colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
 
-neff_values = matrix(nrow = length(parnames), ncol = num_switches +1)
-rownames(neff_values) = parnames
-colnames(neff_values) = paste("state",1:(num_switches +1), sep = '')
-
-
 
 pp = 0
 for(pn in parnames){
@@ -77,8 +231,10 @@ for(pn in parnames){
 	for (st in 1:num_states){
 		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = iterations, ncol = num_chains)
 		chain_mat  = chain_mat[sampling_seq,] 
-				
-		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
+		
+		conv_stats = Rhat_fnc(chain_mat)
+		
+		Rhat_values[pp,st] = conv_stats$Rhat
 		
 		}
 		
@@ -86,11 +242,86 @@ for(pn in parnames){
 print("Potential Scale Reduction Factor (< 1.1)")
 print(Rhat_values)
 print("Number of Effective Samples (> 5*2*num_chains)")
+print(neff_values)
 return(list(chain_output= all_chains,Rhat =  Rhat_values,init_tau = initial_taus, acceptance_tau = accept_taus))
 
 } #End of the function
 
 
+ 
+
+
+
+##================================================
+## Helper Functions
+##=================================================
+
+
+##-----------------------------------------------------
+## Functions to help with lists
+##-----------------------------------------------------
+
+
+col_to_list = function(matrix){
+	lapply(seq_len(ncol(matrix)), function(i) matrix[,i] )
+}
+
+sum_diff_range = function(vector, index){
+	return(sum(diff(vector[index])))
+}
+
+
+get_postsamp = function(post_samples,parname, state_index){
+	return(post_samples[[parname]][,state_index])
+}
+
+##-----------------------------------------------------
+## Sampling Functions
+##-----------------------------------------------------
+
+
+rnorm_list = function(n, pars){
+	return(rnorm(n = 1, mean = pars[1], sd = sqrt(pars[2])))
+}
+
+rgamma_list = function(n, pars){
+	return(rgamma(n = 1, shape = pars[1], rate=pars[2]))
+}
+
+sampler_discrete_uniform = function(current, step){
+	return(sample((current -step):(current+step) , 1))
+}
+
+
+##-----------------------------------------------------
+## Log likelihoods
+##-----------------------------------------------------
+
+
+
+ll_switch_interval = function(time, Xn, taus, lambdas, etas){
+	
+	num_per_state = diff(taus) 
+	state_1_index = (taus[1]+1):taus[2]
+	state_2_index = (taus[2]+1):taus[3]
+
+	Delta_n1 = time[state_1_index] - time[state_1_index - 1]
+
+	ll_1 = (num_per_state[1]/2)*(log(etas[1]) - log(2*pi)) - (1/2)*sum(log(Delta_n1))-(etas[1]/2)*sum(((Xn[state_1_index]- Xn[(state_1_index -1)] - Delta_n1*lambdas[1])^2)/Delta_n1)
+	
+	Delta_n2 = time[state_2_index] - time[state_2_index - 1]
+
+	ll_2 = (num_per_state[2]/2)*(log(etas[2]) - log(2*pi)) - (1/2)*sum(log(Delta_n2))-(etas[2]/2)*sum(((Xn[state_2_index]- Xn[(state_2_index) -1] - Delta_n2*lambdas[2])^2)/Delta_n2)
+
+	return(ll_1 + ll_2)
+
+}
+
+
+
+##-----------------------------------------------------
+## Convergence Statistic
+##-----------------------------------------------------
 
 Rhat_fnc = function(post_matrix){
 	num_samples  = nrow(post_matrix)
@@ -114,4 +345,73 @@ Rhat_fnc = function(post_matrix){
 	
 	return(sqrt(Var_est/ Within_var))
 }
- 
+
+
+
+variogram_fnc = function(post_matrix, lag_t){
+	if(is.matrix(post_matrix) == FALSE){
+		stop("Posterior Samples need to be in a matrix with (i,j)th entry is the ith sample from the jth chain")
+	}
+	
+	num_chains = ncol(post_matrix)
+	num_lags =nrow(post_matrix) - lag_t
+	return((1/num_chains)*(1/num_lags)*sum(apply(post_matrix, 2,diff, lag = lag_t)^2))	
+}
+
+
+convergence_stats_fnc = function(post_matrix){
+	
+	if(is.matrix(post_matrix) == FALSE){
+		stop("Posterior Samples need to be in a matrix with (i,j)th entry is the ith sample from the jth chain")
+	}
+	
+	
+## To calculate the variance of the samples	
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	num_chains  = 2*ncol(post_matrix)
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+
+
+## Rhat Statistic	
+	Rhat = sqrt(Var_est/ Within_var)	
+	
+## N effective - only makes sense to compute when the chain is well mixed
+	
+	if(Rhat <=1.1){
+	
+	rho_hat_t = 1-(sapply(1:num_split_samp, variogram_fnc, post_matrix = post_matrix)/(2*Var_est))
+	
+	odds_seq = seq(1, num_split_samp-2, by = 2)	
+		
+	lag_T = min(odds_seq[which(rho_hat_t[odds_seq + 1] + rho_hat_t[odds_seq + 2] < 0)], num_split_samp)
+	print(lag_T)
+	if(lag_T == num_split_samp){print(paste("T = ", num_split_samp))}
+	
+	neff = (num_chains*num_split_samp)/(1 + 2*sum(rho_hat_t[1:lag_T]))
+	}else{
+		neff= NA	
+		}
+	
+	return(list(Rhat = Rhat, neff = neff))
+}
+
+
+
+
+
+
