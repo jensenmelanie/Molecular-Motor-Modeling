@@ -278,7 +278,7 @@ plot_traj_switch = function(time, Xn, tau_est_index, true_taus = NA){
 	if( is.na(true_taus[1]) ==TRUE){
 		return(my_plot)
 	}else{
-		return(my_plot + geom_vline(aes(xintercept = time[true_taus]),linetype= 'dashed', color = 'navy', alpha = 0.5))
+		return(my_plot + geom_vline(aes(xintercept = true_taus),linetype= 'dashed', color = 'navy', alpha = 0.5))
 	}
 	
 	
