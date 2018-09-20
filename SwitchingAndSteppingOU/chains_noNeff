@@ -1,0 +1,117 @@
+
+##=============================================
+## Algorithm for Multiple Chains
+##=============================================
+
+
+
+BMdrift_switch_chains = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
+
+sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
+
+
+all_chains = list()
+all_post = list()
+
+
+all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
+
+if(plot_it == TRUE){
+lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
+eta_violin = plot_post_violin(log10(all_chains[[1]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),, every_kth = every_kth)
+tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[1]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time),every_kth = every_kth)
+grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+}
+
+all_post[[1]] = all_chains[[1]]$post_samp
+initial_taus = all_chains[[1]]$initial_tau
+accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
+
+for( m in 2:num_chains){
+	all_chains[[m]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'random', cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
+	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
+	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
+	
+	all_post[[m]] = all_chains[[m]]$post_samp
+	
+	if(plot_it == TRUE){
+	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
+	eta_violin = plot_post_violin(log10(all_chains[[m]]$post_samp$eta), parname= c(paste("log10eta", 1:(num_switches+1))),every_kth = every_kth)
+	tau_violin = plot_post_violin(matrix(mydata$time[all_chains[[m]]$post_samp$tau], ncol =num_switches ), parname= c(paste("tau", 1:num_switches)), par_range = range(mydata$time), every_kth = every_kth)
+	grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
+	}
+
+}
+
+
+names(all_chains) = paste("chain", 1:num_chains, sep = '')
+names(all_post) = paste("chain", 1:num_chains, sep = '')
+
+colnames(initial_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(initial_taus) = names(all_post)
+#print(initial_taus)
+
+colnames(accept_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(accept_taus) = paste("chain", 1:num_chains, sep = '')
+print("Acceptance Rate for tau")
+print(accept_taus)
+##-------------------------------------------
+##Convergence statistics (Rhat and neff)
+##-------------------------------------------
+
+parnames = names(all_post[[1]])
+Rhat_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(Rhat_values) = parnames
+colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
+
+neff_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(neff_values) = parnames
+colnames(neff_values) = paste("state",1:(num_switches +1), sep = '')
+
+
+
+pp = 0
+for(pn in parnames){
+	num_states = ncol(all_post$chain1[[pn]])
+	pp = pp + 1
+	for (st in 1:num_states){
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = iterations, ncol = num_chains)
+		chain_mat  = chain_mat[sampling_seq,] 
+				
+		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
+		
+		}
+		
+} # End of the parameter loops
+print("Potential Scale Reduction Factor (< 1.1)")
+print(Rhat_values)
+print("Number of Effective Samples (> 5*2*num_chains)")
+return(list(chain_output= all_chains,Rhat =  Rhat_values,init_tau = initial_taus, acceptance_tau = accept_taus))
+
+} #End of the function
+
+
+
+Rhat_fnc = function(post_matrix){
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+	
+	return(sqrt(Var_est/ Within_var))
+}
+ 
