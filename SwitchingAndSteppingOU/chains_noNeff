@@ -241,8 +241,6 @@ for(pn in parnames){
 } # End of the parameter loops
 print("Potential Scale Reduction Factor (< 1.1)")
 print(Rhat_values)
-print("Number of Effective Samples (> 5*2*num_chains)")
-print(neff_values)
 return(list(chain_output= all_chains,Rhat =  Rhat_values,init_tau = initial_taus, acceptance_tau = accept_taus))
 
 } #End of the function
