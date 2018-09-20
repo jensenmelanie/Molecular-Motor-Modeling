@@ -10,7 +10,7 @@ library(ggplot2)
 ##=================================================
  
  
-BMdrift_switch_inf = function(mydata, num_switches,init_tau = 'uniform', cand_tau_step_per = 0.05,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
+BMdrift_switch_inf = function(mydata, num_switches,init_tau = 'uniform', cand_tau_step_per = 0.05,min_dur = 2,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
 
 num_obs = length(mydata$time)
 num_states = num_switches + 1
@@ -35,8 +35,8 @@ if(init_tau == 'uniform'){
 	post_samp$tau[1,] = initial_tau
 }else{
 	
-	first_half = 3:floor((num_obs-2)*0.5)
-	second_half = (floor((num_obs-2)*0.5)+1):(num_obs-2)
+	first_half = (min_dur+1):floor((num_obs-min_dur)*0.5)
+	second_half = (floor((num_obs-min_dur)*0.5)+1):(num_obs-min_dur)
 	
 	possible_switches = c(sample(first_half, ceiling(num_switches/2)),sample(second_half, ceiling(num_switches/2)))
 	
@@ -110,7 +110,7 @@ for(st in 1:num_switches){
 	cand_tau = sampler_discrete_uniform(tau_loop_vec[2], cand_var_tau[st])
 	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
 	
-	 overlapping_indicator = as.numeric(cand_tau<= (tau_loop_vec[1]+1) ) + as.numeric(cand_tau >= (tau_loop_vec[3]-1)) + as.numeric(cand_tau <= 2) + as.numeric(cand_tau >= (num_obs-1))
+	 overlapping_indicator = as.numeric(cand_tau<= (tau_loop_vec[1]+1) ) + as.numeric(cand_tau >= (tau_loop_vec[3]-1)) + as.numeric(cand_tau <= min_dur) + as.numeric(cand_tau >= (num_obs-min_dur+1))
 	
 	if( overlapping_indicator > 0){
 		ratio = 0; overlapping_intervals[it, st] = 1
@@ -163,7 +163,7 @@ return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initi
 
 
 
-BMdrift_switch_chains_rhat = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
+BMdrift_switch_chains_rhat = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,min_dur = 2, iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
 
 sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
 
@@ -172,7 +172,7 @@ all_chains = list()
 all_post = list()
 
 
-all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
+all_chains[[1]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'uniform',cand_tau_step_per,min_dur = min_dur, iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)
 
 if(plot_it == TRUE){
 lambda_violin = plot_post_violin(all_chains[[1]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
@@ -189,7 +189,7 @@ initial_taus = all_chains[[1]]$initial_tau
 accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
 
 for( m in 2:num_chains){
-	all_chains[[m]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'random', cand_tau_step_per, iterations, warmup_per, plot_it = FALSE)
+	all_chains[[m]] = BMdrift_switch_inf(mydata, num_switches,init_tau = 'random', cand_tau_step_per, min_dur = min_dur,iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)
 	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
 	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
 	
