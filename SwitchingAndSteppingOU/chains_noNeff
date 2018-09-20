@@ -163,7 +163,7 @@ return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initi
 
 
 
-BMdrift_switch_chains = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
+BMdrift_switch_chains_rhat = function(mydata, num_switches, num_chains = 2, cand_tau_step_per = 0.05,iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
 
 sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
 
