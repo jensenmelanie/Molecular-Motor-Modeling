@@ -231,10 +231,8 @@ for(pn in parnames){
 	for (st in 1:num_states){
 		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = iterations, ncol = num_chains)
 		chain_mat  = chain_mat[sampling_seq,] 
-		
-		conv_stats = Rhat_fnc(chain_mat)
-		
-		Rhat_values[pp,st] = conv_stats$Rhat
+
+		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
 		
 		}
 		
