@@ -8,7 +8,7 @@ BMdrift_MCMC_alg = function(data, iterations = 4000){
 ##-------------------------------------------------
 ## Setting the hyperparameters and initializing 
 ##-------------------------------------------------
-time = data$time; Delta_n = diff(time); num_incr = length(diff(Xn))
+time = data$time; Delta_n = diff(time); num_incr = length(diff(data$Xn))
 Xn = data$Xn
 
 
@@ -52,9 +52,9 @@ return(list(post_samp = post_samp, inital = c(lambda_0, eta_0)))
 ##=============================================
 
 
-BMdrift_chains = function(mydata, num_chains = 2,iterations = 10000, warmup_per = 0.5,every_kth = 1){
+BMdrift_chains = function(mydata, num_chains = 2,iterations = 10000, warmup_per = 0.5,every_kth = 1, plot_it = FALSE){
 
-sampling_seq = seq(ceiling(iterations*warmup_per)+ 1, iterations, by = 1)
+sampling_seq = seq(ceiling(iterations*warmup_per)+ every_kth, iterations, by = every_kth)
 
 
 all_chains = list()
@@ -62,29 +62,41 @@ all_post = list()
 
 
 all_chains[[1]] = BMdrift_MCMC_alg(mydata, iterations)
+all_post[[1]] = all_chains[[1]]$post_samp
 
-
+if(plot_it == TRUE){
 lambda_violin = plot_post_violin(matrix(all_chains[[1]]$post_samp$lambda, ncol = 1), parname= c(paste("lambda", 1)), every_kth = every_kth, warmup = warmup_per)
 eta_violin = plot_post_violin(matrix(log10(all_chains[[1]]$post_samp$eta), ncol = 1), parname= c(paste("log10eta", 1)), every_kth = every_kth, warmup = warmup_per)
  grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+}
 
-
-all_post[[1]] = all_chains[[1]]$post_samp
 
 for( m in 2:num_chains){
 	all_chains[[m]] = BMdrift_MCMC_alg(mydata, iterations)
 	all_post[[m]] = all_chains[[m]]$post_samp
-	
+if(plot_it == TRUE){
 lambda_violin = plot_post_violin(matrix(all_chains[[m]]$post_samp$lambda, ncol = 1), parname= c(paste("lambda", 1)), every_kth = every_kth, warmup = warmup_per)
 eta_violin = plot_post_violin(matrix(log10(all_chains[[m]]$post_samp$eta), ncol = 1), parname= c(paste("log10eta", 1)), every_kth = every_kth, warmup = warmup_per)
- grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
-
-
+ grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob(paste("Chain ",m),gp = gpar(fontsize = 18)))
 }
 
-
+}
 names(all_chains) = paste("chain", 1:num_chains, sep = '')
 names(all_post) = paste("chain", 1:num_chains, sep = '')
+##-------------------------------------------
+##Model Comparison Stats
+##-------------------------------------------
+model_comp_stats = matrix(nrow = 2, ncol = 1)
+rownames(model_comp_stats) = c("log10PBS", "ElogL")
+
+post_lambda  = c(sapply(all_post, get_postsamp_1d, parname= 'lambda')[sampling_seq,])
+post_eta = c(sapply(all_post, get_postsamp_1d, parname= 'eta')[sampling_seq,])
+
+sub_post = list(lambda = post_lambda, eta = post_eta)
+model_comp_stats[,1] = c(log10(PBS_BMdrift(mydata, sub_post, num_switch_pts = 0, every_kth = 1, burn_in_per = 0)),pwaic_BMdrift(mydata, sub_post, num_switch_pts = 0, every_kth = 1, burn_in_per= 0))
+
+
+
 
 ##-------------------------------------------
 ##Convergence statistics (Rhat and neff)
@@ -121,7 +133,7 @@ print("Potential Scale Reduction Factor (< 1.1)")
 print(Rhat_values)
 print("Number of Effective Samples (> 5*2*num_chains)")
 print(neff_values)
-return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values))
+return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values, model_comp = model_comp_stats))
 
 } #End of the function
 
@@ -131,6 +143,7 @@ return(list(chain_output= all_chains,Rhat =  Rhat_values,neff = neff_values))
 ##================================================
 ## Helper Functions
 ##=================================================
+
 
 get_postsamp_1d = function(post_samples,parname){
 	return(post_samples[[parname]])
