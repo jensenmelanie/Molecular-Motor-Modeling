@@ -1,24 +1,5 @@
-library(RColorBrewer)
-mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
 
-## Need to load in the model comparison file for the MAP estimator function
-
-
-##===============================================================
-## Helper functions
-##===============================================================
-get_colors = function(num_colors){
-	my_colors = mellow.color.pal(num_colors +2)
-	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
-		my_colors = my_colors[- which(my_colors == "#FFFFBF")]
-	}else{
-		my_colors = my_colors[1:(num_colors +1)]
-	}
-	return(my_colors)
-} 
-
-
-
+print('Load in the model comparison script for the MAP_est function')
 ##===============================================================
 ## Plotting for posterior samples of an MCMC algorithm where 
 ## parameter values change over states
@@ -243,15 +224,33 @@ grid.arrange( lambda_plot,tau_plot, eta_plot, layout_matrix = rbind(c(1,1,3),c(2
 	
 } #End of function
 
-##---------------------------------
-##Plot of a trajectoy that switches state or doesnt
-##--------------------------------
 
-plot_traj_switch = function(time, Xn, tau_est_index){
+
+##===============================================================
+## Plotting of the trajectory with the states marked
+## Bayes estimator for tau is MAP
+##===============================================================
+
+
+get_colors = function(num_colors){
+	my_colors = mellow.color.pal(num_colors +2)
+	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
+		my_colors = my_colors[- which(my_colors == "#FFFFBF")]
+	}else{
+		my_colors = my_colors[1:(num_colors +1)]
+	}
+	return(my_colors)
+} 
+
+ 
+
+
+
+plot_traj_switch = function(time, Xn, tau_est_index, true_taus = NA){
 	
 	if(is.na(tau_est_index[1]) == TRUE){
 		traj_df = data.frame(time = time, Xn = Xn)
-		ggplot(data = traj_df, aes(x = time, y = Xn)) +geom_path() +labs(x = "Time", y = "Position")+ggtitle("Assuming k = 0 switch points")
+		my_plot = ggplot(data = traj_df, aes(x = time, y = Xn)) +geom_path() +labs(x = "Time", y = "Position")+ggtitle("Assuming k = 0 switch points")
 	
 	}else{
 	
@@ -273,27 +272,23 @@ plot_traj_switch = function(time, Xn, tau_est_index){
 	tau_est_df = data.frame(time = time[tau_est_index], Xn = Xn[tau_est_index])
 	connect_df = data.frame(time = time[connect_index], Xn = Xn[connect_index], state = sort(rep(2:num_states, each = 2)) )
 	
-	ggplot(data = traj_df, aes(x = time, y = Xn,color = factor(state))) +geom_path() + geom_path(data =connect_df, aes(x = time, y = Xn))+geom_point(data = tau_est_df, aes(x = time, y = Xn , colour = as.factor(1:(num_states-1))), show.legend = F)+labs(color = "State Index", x = "Time", y = "Position")+ggtitle(paste("Assuming k =",num_states-1,"switch points"))+scale_color_manual(values = my_colors, guide = F)
+	my_plot = ggplot(data = traj_df, aes(x = time, y = Xn,color = factor(state))) +geom_path() + geom_path(data =connect_df, aes(x = time, y = Xn))+geom_point(data = tau_est_df, aes(x = time, y = Xn , colour = as.factor(1:(num_states-1))), show.legend = F)+labs(color = "State Index", x = "Time", y = "Position")+ggtitle(paste("Assuming k =",num_states-1,"switch points"))+scale_color_manual(values = my_colors, guide = F)
 	}
+	
+	if( is.na(true_taus[1]) ==TRUE){
+		return(my_plot)
+	}else{
+		return(my_plot + geom_vline(aes(xintercept = time[true_taus]),linetype= 'dashed', color = 'navy', alpha = 0.5))
+	}
+	
+	
+	
 }
 
-##---------------------------------
-##Plot of a trajectoy that does not switch
-##--------------------------------
-
-plot_traj = function(time, Xn){
-	traj_df = data.frame(time = time, Xn = Xn)
-	ggplot(data = traj_df, aes(x = time, y = Xn)) +geom_path() +labs(x = "Time", y = "Position")+ggtitle("Assuming k = 0 switch points")
-	}
-
-
-
-
-##---------------------------------
-##Posterior Sample Violin plots eta/lambda vs tau
-##requires map function
-##--------------------------------
-plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup = 0.5){
+##===============================================================
+## Plotting of the violin plot of lambda or eta vs tau
+##===============================================================
+plot_violin_tau_par2 = function(time,post_samp, par2_name, par2_lim = NA,every_kth = 1, warmup = 0.5){
 	par2_post = post_samp[[par2_name]]
 	tau_post = post_samp[['tau']]
 	num_obs = length(time)
@@ -314,9 +309,13 @@ plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup
 	
 	par2_pos = time[round(diff(c(1, tau_map, num_obs))/2) + c(0, tau_map)]	
 	par2_df = data.frame(state = rep(1:num_states, each = num_ksamp), value = c(par2_post[every_kth_seq,]), xpos = rep(par2_pos, each = num_ksamp) )
-	par2_range = range(c(par2_post[every_kth_seq,]))
-	par2_range[1] = par2_range[1]- par2_range[2]*0.25
 	
+	if(is.na(par2_lim[1]) == TRUE){
+		par2_range = range(c(par2_post[every_kth_seq,]))
+		par2_range[1] = par2_range[1]- par2_range[2]*0.25
+	}else{
+		par2_range = par2_lim
+		}
 	tau_y = max(0, par2_range[1])
 	tau_df =data.frame(state = rep(1:num_switches, each = num_ksamp), value = time[tau_post], ypos = rep(tau_y,length(c(tau_post))))
 	tau_map_df = data.frame(ypos = rep(tau_y, num_switches), value = time[tau_map], state = 1:num_switches)
@@ -339,14 +338,28 @@ plot_violin_tau_par2 = function(time,post_samp, par2_name, every_kth = 1, warmup
 	
 }
 
-##---------------------------------
-##plot of Posterior Bayes or Expected log likelihood (wrt to posterior
-##--------------------------------
-plot_PBS = function(num_switches, PBS, title){
+##===============================================================
+## Plotting the posterior bayes scores for different number of switches
+##===============================================================
+
+plot_PBS = function(num_switches, PBS, title = "Posterior Bayes Score"){
 	PBS_df = data.frame(switch = num_switches, PBS = PBS)
 	
-	ggplot(PBS_df, aes(x = switch, y = PBS)) + geom_path() + geom_point(size = 2) + xlab("Number of Switches Assumed") + ylab("log10(Score)") + ggtitle(title) + scale_x_continuous(breaks  = num_switches)
+	ggplot(PBS_df, aes(x = switch, y = PBS)) + geom_path() + geom_point(size = 2) + xlab("Number of Switches Assumed") + ylab("log10(PBS)") + ggtitle(title) + scale_x_continuous(breaks  = num_switches)
 	
 }
+
+
+##---------------------------------
+##Plot of a trajectoy that does not switch
+##--------------------------------
+
+plot_traj = function(time, Xn){
+	traj_df = data.frame(time = time, Xn = Xn)
+	ggplot(data = traj_df, aes(x = time, y = Xn)) +geom_path() +labs(x = "Time", y = "Position")+ggtitle("Assuming k = 0 switch points")
+	}
+
+
+
 
 
