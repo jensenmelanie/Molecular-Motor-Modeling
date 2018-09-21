@@ -4,12 +4,6 @@ library(gridExtra)
 library(ggplot2)
 
 
- 
-##================================================
-## Algorithm Function
-##=================================================
- 
- 
 BMdrift_switch_inf = function(mydata, num_switches,init_tau = 'uniform', cand_tau_step_per = 0.05,min_dur = 2,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
 
 num_obs = length(mydata$time)
@@ -46,10 +40,9 @@ if(init_tau == 'uniform'){
 }
 
 
-
-initial_lambda = rnorm(n = num_states, mean  =2, sd =1)
+initial_lambda = rnorm(n = num_states, mean  =2, sd = 1)
 post_samp$lambda[1,] = initial_lambda
-
+print(initial_lambda)
 initial_eta = rgamma(n = num_states, shape = .1, rate = .1)
 post_samp$eta[1,] = initial_eta
 
@@ -98,7 +91,6 @@ lambda_post_var = (unlist(lapply(Delta_n_st,sum))*post_samp$eta[it,])^(-1)
 lambda_post_mean = unlist(lapply(Xincr_st, sum))/unlist(lapply(Delta_n_st,sum))
 
 post_samp$lambda[it,] = unlist(lapply(col_to_list(rbind(lambda_post_mean,lambda_post_var)), rnorm_list, n = 1))
-
 
 ##-----------------------------tau block-----------------------------
 tau_vec_it = c(1, post_samp$tau[it-1,], num_obs)
