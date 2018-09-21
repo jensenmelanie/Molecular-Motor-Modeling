@@ -204,6 +204,3 @@ convergence_stats_fnc = function(post_matrix){
 	
 	return(list(Rhat = Rhat, neff = neff))
 }
-
-
-
