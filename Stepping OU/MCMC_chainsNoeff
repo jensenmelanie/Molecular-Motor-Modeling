@@ -1,0 +1,159 @@
+ 
+##================================================
+## Algorithm Function
+##=================================================
+
+	
+BMdrift_MCMC_alg = function(data, iterations = 4000){	
+##-------------------------------------------------
+## Setting the hyperparameters and initializing 
+##-------------------------------------------------
+time = data$time; Delta_n = diff(time); num_incr = length(diff(data$Xn))
+Xn = data$Xn
+
+
+lambda_0 = rnorm(1, mean = 1, sd = 1)
+ eta_0 = rgamma(1, shape =1, rate = 1)
+ 
+##-------------------------------------------------
+## Defining output
+##-------------------------------------------------
+post_samp = list(lambda = vector(length = iterations), eta = vector(length = iterations))
+
+post_samp$lambda[1] = lambda_0
+post_samp$eta[1] = eta_0
+
+for( n in 1:(iterations -1)){
+
+##-------------------------------------------------
+## Lambda block
+##-------------------------------------------------
+lambda_post_mu = sum(diff(Xn)/sum(Delta_n))
+lambda_post_sigma = sqrt((post_samp$eta[n]*sum(Delta_n))^(-1))
+post_samp$lambda[n+1] = rnorm(n = 1, mean = lambda_post_mu, sd = lambda_post_sigma)
+
+
+##-------------------------------------------------
+## eta block
+##-------------------------------------------------
+eta_post_alpha = num_incr/2
+eta_post_beta = (1/2)*sum((diff(Xn) - post_samp$lambda[n+1]*Delta_n)^2/Delta_n)
+post_samp$eta[n+1] = rgamma(n = 1, shape = eta_post_alpha, rate = eta_post_beta)
+
+} #end of the sampling loop
+
+return(list(post_samp = post_samp, inital = c(lambda_0, eta_0)))
+
+} #end of the iterations loop
+
+
+##=============================================
+## Algorithm for Multiple Chains
+##=============================================
+
+
+BMdrift_chains_Rhat = function(mydata, num_chains = 2,iterations = 10000, warmup_per = 0.5,every_kth = 1, plot_it = FALSE){
+
+sampling_seq = seq(ceiling(iterations*warmup_per)+ every_kth, iterations, by = every_kth)
+
+
+all_chains = list()
+all_post = list()
+
+
+all_chains[[1]] = BMdrift_MCMC_alg(mydata, iterations)
+all_post[[1]] = list(lambda = matrix(all_chains[[1]]$post_samp$lambda[sampling_seq],ncol = 1),eta = matrix(all_chains[[1]]$post_samp$eta[sampling_seq],ncol = 1) )
+
+if(plot_it == TRUE){
+lambda_violin = plot_post_violin(matrix(all_chains[[1]]$post_samp$lambda, ncol = 1), parname= c(paste("lambda", 1)), every_kth = every_kth, warmup = warmup_per)
+eta_violin = plot_post_violin(matrix(log10(all_chains[[1]]$post_samp$eta), ncol = 1), parname= c(paste("log10eta", 1)), every_kth = every_kth, warmup = warmup_per)
+ grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+}
+
+
+for( m in 2:num_chains){
+	all_chains[[m]] = BMdrift_MCMC_alg(mydata, iterations)
+	all_post[[m]] = list(lambda = matrix(all_chains[[m]]$post_samp$lambda[sampling_seq],ncol = 1),eta = matrix(all_chains[[m]]$post_samp$eta[sampling_seq],ncol = 1) )
+
+
+if(plot_it == TRUE){
+lambda_violin = plot_post_violin(matrix(all_chains[[m]]$post_samp$lambda, ncol = 1), parname= c(paste("lambda", 1)), every_kth = every_kth, warmup = warmup_per)
+eta_violin = plot_post_violin(matrix(log10(all_chains[[m]]$post_samp$eta), ncol = 1), parname= c(paste("log10eta", 1)), every_kth = every_kth, warmup = warmup_per)
+ grid.arrange( lambda_violin, eta_violin, ncol = 2, top = textGrob(paste("Chain ",m),gp = gpar(fontsize = 18)))
+}
+
+}
+names(all_chains) = paste("chain", 1:num_chains, sep = '')
+names(all_post) = paste("chain", 1:num_chains, sep = '')
+
+
+##-------------------------------------------
+##Convergence statistics (Rhat and neff)
+##-------------------------------------------
+
+parnames = names(all_post[[1]])
+Rhat_values = matrix(nrow = length(parnames), ncol = 1)
+rownames(Rhat_values) = parnames
+colnames(Rhat_values) = c('state 1')
+
+
+pp = 0
+for(pn in parnames){
+	num_states = 1
+	pp = pp + 1
+	
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp_1d, parname = pn)), nrow = length(sampling_seq), ncol = num_chains)
+				
+		Rhat_values[pp,1] = Rhat_fnc(chain_mat)
+		
+		
+} # End of the parameter loops
+print("Potential Scale Reduction Factor (< 1.1)")
+print(Rhat_values)
+return(list(post_samp= all_post,Rhat =  Rhat_values))
+
+} #End of the function
+
+
+
+
+##================================================
+## Helper Functions
+##=================================================
+
+
+get_postsamp_1d = function(post_samples,parname){
+	return(post_samples[[parname]])
+}
+
+ variogram_fnc = function(post_matrix, lag_t){
+	num_chains = ncol(post_matrix)
+	num_lags =nrow(post_matrix) - lag_t
+	return((1/num_chains)*(1/num_lags)*sum(apply(post_matrix, 2,diff, lag = lag_t)^2))	
+}
+
+
+
+Rhat_fnc = function(post_matrix){
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+	
+	return(sqrt(Var_est/ Within_var))
+}
+
