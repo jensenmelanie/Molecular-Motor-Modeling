@@ -262,7 +262,6 @@ BMdrift_switchMean_chains_Rhat = function(mydata, num_switches, num_chains = 2, 
 
 sampling_seq = seq(ceiling(iterations*warmup_per)+ every_kth, iterations, by = every_kth)
 
-
 all_chains = list()
 all_post = list()
 
@@ -308,7 +307,6 @@ names(all_post) = paste("chain", 1:num_chains, sep = '')
 
 colnames(initial_taus) = paste('tau', 1:num_switches, sep = '')
 rownames(initial_taus) = names(all_post)
-#print(initial_taus)
 
 colnames(accept_taus) = paste('tau', 1:num_switches, sep = '')
 rownames(accept_taus) = paste("chain", 1:num_chains, sep = '')
@@ -329,9 +327,8 @@ for(pn in parnames){
 	num_states = ncol(all_post$chain1[[pn]])
 	pp = pp + 1
 	for (st in 1:num_states){
-		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = iterations, ncol = num_chains)
-		chain_mat  = chain_mat[sampling_seq,] 
-				
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+								
 		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
 		
 		}
