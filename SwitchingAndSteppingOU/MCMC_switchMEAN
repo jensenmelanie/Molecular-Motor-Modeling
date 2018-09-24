@@ -280,7 +280,7 @@ grid.arrange(tau_violin, lambda_violin, eta_violin, layout_matrix = cbind(c(1,1,
 
 
 
-all_post[[1]] = list(lambda = all_chains[[1]]$post_samp$lambda[sampling_seq,], eta = matrix(all_chains[[1]]$post_samp$eta[sampling_seq,],ncol = 1), tau = matrix(all_chains[[1]]$post_samp$tau[sampling_seq],ncol = num_switches))
+all_post[[1]] = list(lambda = all_chains[[1]]$post_samp$lambda[sampling_seq,], eta = matrix(all_chains[[1]]$post_samp$eta[sampling_seq,],ncol = 1), tau = matrix(all_chains[[1]]$post_samp$tau[sampling_seq,],ncol = num_switches))
 
 initial_taus = all_chains[[1]]$initial_tau
 accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
@@ -290,7 +290,7 @@ for( m in 2:num_chains){
 	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
 	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
 	
-	all_post[[m]] =list(lambda = all_chains[[m]]$post_samp$lambda[sampling_seq,], eta = matrix(all_chains[[m]]$post_samp$eta[sampling_seq,],ncol = 1), tau = matrix(all_chains[[m]]$post_samp$tau[sampling_seq],ncol = num_switches))
+	all_post[[m]] =list(lambda = all_chains[[m]]$post_samp$lambda[sampling_seq,], eta = matrix(all_chains[[m]]$post_samp$eta[sampling_seq,],ncol = 1), tau = matrix(all_chains[[m]]$post_samp$tau[sampling_seq,],ncol = num_switches))
 
 if(plot_it == TRUE){	
 	lambda_violin = plot_post_violin(all_chains[[m]]$post_samp$lambda, parname= c(paste("lambda", 1:(num_switches+1))), every_kth = every_kth)
@@ -324,10 +324,11 @@ colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
 
 pp = 0
 for(pn in parnames){
-	num_states = ncol(all_post$chain1[[pn]])
+	num_states = ncol(all_post$chain1[[pn]]); num_samp = nrow(all_post$chain1[[pn]])
 	pp = pp + 1
 	for (st in 1:num_states){
-		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = num_samp, ncol = num_chains)
 								
 		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
 		
