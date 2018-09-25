@@ -9,9 +9,15 @@ row_to_list = function(matrix){
 }
 
 
+
 every_kth_entry = function(matrix, every_kth = 1, burn_in_per = 0.5){
-	to_take_index = seq((ceiling(nrow(matrix)*burn_in_per) + every_kth), ceiling(nrow(matrix)), by = every_kth)
-	return(matrix[to_take_index,])
+	mat_dim = dim(matrix)
+	to_take_index = seq((ceiling(nrow(matrix)*burn_in_per) + every_kth), nrow(matrix), by = every_kth)
+	if(mat_dim[2] == 1){
+		return(matrix(matrix[to_take_index,], ncol = 1))
+	}else{
+		return(matrix[to_take_index,])
+		}
 }
 
 
