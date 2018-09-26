@@ -97,7 +97,7 @@ plot_post_violin = function(post_samp, parname, par_range= NA, every_kth = 1, wa
 num_samples = nrow(post_samp)
 num_par = ncol(post_samp)
 
-every_kth_index = seq(ceiling(warmup*num_samples)+1, num_samples, by= every_kth)
+every_kth_index = seq(ceiling(warmup*num_samples)+every_kth, num_samples, by= every_kth)
 num_samp_k = length(every_kth_index)
 
 
