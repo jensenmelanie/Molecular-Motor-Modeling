@@ -3,8 +3,6 @@ library(grid)
 library(gridExtra)
 library(ggplot2)
 
-
- 
 ##================================================
 ## Algorithm Function
 ##=================================================
@@ -14,10 +12,17 @@ BMdrift_Meanswitch_contTau = function(mydata, num_switches,init_tau = 'uniform',
 min_delta = min(unique(diff(mydata$time)))
 num_obs = length(mydata$time)
 num_states = num_switches + 1
+
+if(num_states*(min_dur+1)>= num_obs){
+	stop("Not enough observations for each state to be observed for the given number of minimum observations")
+}
+
+
 ##---------------------------------------------------------------------
 ## Storing the posterior samples
 ##---------------------------------------------------------------------
-tau_support = c(mydata$time[min_dur],mydata$time[num_obs-min_dur])
+tau_support = c(mydata$time[min_dur+1],mydata$time[num_obs-min_dur+1])
+## we add one because we want 10 increments per state
 
 post_samp = list()
 post_samp$lambda = matrix(nrow = iterations, ncol = num_states)
@@ -34,12 +39,14 @@ if(init_tau == 'uniform'){
 	initial_tau = diff(tau_support)*((1:num_switches)/num_states)
 	post_samp$tau[1,] = initial_tau
 }else{
-	first_half_switch = runif(ceiling(num_switches/2), min = tau_support[1], max = diff(tau_support)/2)
-	second_half_switch = runif(ceiling(num_switches/2), min = diff(tau_support)/2, max = tau_support[2])	
-	possible_switches = c(first_half_switch, second_half_switch)
 	
-	initial_tau = sort(possible_switches[sample(1:length(possible_switches), num_switches)])
+	initial_tau = runif(n= 1, min = tau_support[1], max = mydata$time[num_obs -(min_dur+1)*num_switches] )
 
+	if(num_switches >1){
+		for(j in 1:(num_switches-1)){
+			initial_tau = c(initial_tau, runif(n =1, min = mydata$time[get_tau_index(initial_tau[j], mydata$time) + (min_dur+1)], max = mydata$time[num_obs- (min_dur+1)*(num_switches -j)]))
+			}	
+	}
 	post_samp$tau[1,] = initial_tau
 }
 
@@ -114,7 +121,9 @@ for(st in 1:num_switches){
 	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
 	cand_tau_index_vec = sapply(cand_tau_vec, get_tau_index, mydata$time)
 	
-	 overlapping_indicator = as.numeric(cand_tau<= mydata$time[cand_tau_index_vec[1]+1] ) +  as.numeric(cand_tau >= mydata$time[cand_tau_index_vec[3]-1]) + as.numeric(cand_tau <= tau_support[1]) + as.numeric(cand_tau >= tau_support[2])
+	overlapping_indicator = as.numeric(cand_tau_index_vec[2]<= (cand_tau_index_vec[1]+min_dur -1) ) + as.numeric(cand_tau_index_vec[2] >=(cand_tau_index_vec[3]-min_dur+1))+ as.numeric(cand_tau <= tau_support[1]) + as.numeric(cand_tau >= tau_support[2])
+	
+	 #overlapping_indicator = as.numeric(cand_tau<= mydata$time[cand_tau_index_vec[1]+min_dur +1] ) +  as.numeric(cand_tau >= mydata$time[cand_tau_index_vec[3]-min_dur+1]) + as.numeric(cand_tau <= tau_support[1]) + as.numeric(cand_tau >= tau_support[2])
 	
 	if( overlapping_indicator > 0){
 		ratio = 0; overlapping_intervals[it, st] = 1
@@ -151,7 +160,6 @@ for(st in 1:num_switches){
 return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initial_tau))
 
 } #End of the function
-
 
 
 
