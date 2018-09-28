@@ -57,7 +57,14 @@ initial_eta = rgamma(n = 1, shape = .1, rate = .1)
 post_samp$eta[1,] = initial_eta
 
 cand_var_tau = ceiling(length(mydata$Xn)*cand_tau_step_per)*min_delta
-if(length(cand_var_tau) == 1){cand_var_tau = rep(cand_var_tau, num_switches)}
+
+if(length(cand_var_tau) == 1){
+	cand_var_tau = rep(cand_var_tau, num_switches)	}
+else if(length(cand_var_tau)!= num_switches){
+	stop("The chosen cand_var_tau needs to be length 1 or number of switch points")
+}
+
+
 
 ##---------------------------------------------------------------------
 ## Sampling
