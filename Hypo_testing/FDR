@@ -1,0 +1,98 @@
+## Finding the critical value for the 4 tests statisitcs to control the FDR
+## IE the difference between the means is 0 and we do want want a switch point detected
+
+
+## --------- ----------------------------
+##Input Variables
+##--------------------------------------
+# FDR_alpha = 0.95
+# num_paths = 100
+# num_post_samp = 100
+# Delta_values = c(0.1, 0.05,0.02, 0.01, 1/150);
+# N_values = 1/Delta_values
+# sigma_sq_values = c(0.01, 0.1,1,5,10)
+
+
+FDR_critical = function(FDR_alpha, Delta_values, sigma_sq_values, num_paths = 100, num_post_samp = 100){
+
+N_values = 1/Delta_values
+mu = 0
+
+## --------- ----------------------------
+##Output Variables
+##--------------------------------------
+
+stats = list()
+stats$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+stats$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+stats$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+
+for(l in 1:length(stats)){
+	rownames(stats[[l]]) = N_values;colnames(stats[[l]]) = sigma_sq_values
+}
+
+
+
+## --------- ----------------------------
+##Start of loop
+##--------------------------------------
+
+
+for( n in 1:length(N_values)){
+
+	AMOC_Zn = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	AMOC_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	PBF = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	Ell = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+	Bayes_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+
+	for( s in 1:length(sigma_sq_values)){
+				
+		# Set the parameters to simulate the data		
+		N = N_values[n]; true_tau = floor(N/2)
+		sigma_sq = sigma_sq_values[s]
+		count_approx = 0
+		for(np in 1: num_paths){
+			Xin = rnorm(n = N, mean = 0, sd = sqrt(sigma_sq)) 
+	
+
+			## --------- Frequentist statistics ----------------------------
+			AMOC_stats = unlist(AMOC_stat(Xin))
+			AMOC_Zn[np,s] = AMOC_stats[1]
+			AMOC_tau[np,s] = AMOC_stats[2]
+
+			## --------- Bayesian statistics ----------------------------
+			approx_tau_post = FALSE
+			if((length(which(post_pmf_tau(Xin)==0)) == (N-1)) == TRUE){
+				approx_tau_post = TRUE
+				count_approx = 1+count_approx
+			}
+
+		
+			Bayes_stats = bayes_stats(Xin,num_post_samp, approx_tau = approx_tau_post)
+			Ell[np,s] = Bayes_stats$Ell - Bayes_stats$Ell_null
+			PBF[np,s] = Bayes_stats$lPBS - Bayes_stats$lPBS_null
+			Bayes_tau[np,s] = Bayes_stats$tau
+
+		}# end of the particle loop
+		print(paste("N = ", N, "s = ",sigma_sq))
+
+		print(paste("Number of times post tau is approximated ", count_approx))
+	} # End of the sigma_sq loop
+
+
+stats$AMOC[n,] = apply(AMOC_Zn, 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
+stats$Ell[n,] = apply(Ell, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+stats$PBF[n,] = apply(PBF, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+
+
+
+}#End of N loop
+
+return(stats)
+
+} #end of the function
+
+
+
