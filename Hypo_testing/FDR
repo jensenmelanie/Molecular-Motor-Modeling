@@ -87,6 +87,8 @@ stats$PBF[n,] = apply(PBF, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.0
 
 
 
+print(rbind(stats$AMOC[n,],stats$Ell[n,],stats$PBF[n,]))
+
 }#End of N loop
 
 return(stats)
