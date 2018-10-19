@@ -15,9 +15,8 @@
 
 
 
-power_fnc = function(mu, critical,Delta_values, sigma_sq_values,num_paths = 100, num_post_samp = 100){
+power_fnc = function(mu, critical,N_values, sigma_sq_values,num_paths = 100, num_post_samp = 100){
 
-N_values = 1/Delta_values
 
 ## --------- ----------------------------
 ##Output Variables
