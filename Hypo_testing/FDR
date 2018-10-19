@@ -13,9 +13,8 @@
 # sigma_sq_values = c(0.01, 0.1,1,5,10)
 
 
-FDR_critical = function(FDR_alpha, Delta_values, sigma_sq_values, num_paths = 100, num_post_samp = 100){
+FDR_critical = function(FDR_alpha, N_values, sigma_sq_values, num_paths = 100, num_post_samp = 100){
 
-N_values = 1/Delta_values
 mu = 0
 
 ## --------- ----------------------------
