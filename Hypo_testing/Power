@@ -86,10 +86,29 @@ for( n in 1:length(N_values)){
 
 
 
-stat_power$AMOC[n,] =sapply(1:length(sigma_sq_values), function(index){length(which(AMOC_Zn[,index] >= critical$AMOC[n,index]))})/num_paths
-stat_power$Ell[n,] = sapply(1:length(sigma_sq_values), function(index){length(which(Ell[,index] >= critical$Ell[n,index]))})/num_paths
-stat_power$PBF[n,] = sapply(1:length(sigma_sq_values), function(index){length(which(PBF[,index] >= critical$PBF[n,index]))})/num_paths
+AMOC_power_fnc = function(index){
+	if(is.na(critical$AMOC[n,index]) ==TRUE){return(NA)
+		}else{return(length(which(AMOC_Zn[,index] >= critical$AMOC[n,index])))
+			}
+}
 
+Ell_power_fnc = function(index){
+	if(is.na(critical$Ell[n,index]) == TRUE){return(NA)
+		}else{return(length(which(Ell[,index] >= critical$Ell[n,index])))
+			}
+}
+
+PBF_power_fnc = function(index){
+	if(is.na(critical$PBF[n,index]) ==TRUE){return(NA)
+		}else{return(length(which(PBF[,index] >= critical$PBF[n,index])))
+			}
+}
+
+
+
+stat_power$AMOC[n,] =sapply(1:length(sigma_sq_values), AMOC_power_fnc)/num_paths
+stat_power$Ell[n,] = sapply(1:length(sigma_sq_values), Ell_power_fnc)/num_paths
+stat_power$PBF[n,] = sapply(1:length(sigma_sq_values), PBF_power_fnc)/num_paths
 
 }#End of N loop
 
