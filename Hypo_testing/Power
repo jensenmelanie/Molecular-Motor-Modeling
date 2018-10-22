@@ -120,3 +120,129 @@ return(stat_power)
 
 
 }# end of the function
+
+
+
+### ======================================================================
+## Power function gloabl
+### ======================================================================
+
+
+
+power_global_fnc = function(mu, critical,N_values, sigma_sq_values,num_paths = 100, num_post_samp = 100){
+
+
+critical_local = critical$local
+critical_global = critical$global
+
+
+stat_names = names(critical_global)
+## --------- ----------------------------
+##Output Variables
+##--------------------------------------
+
+stat_power = list(); stat_power$local = list(); stat_power$global = list()
+
+for( l in 1:length(stat_names)){
+	stat_power$local[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+	rownames(stat_power$local[[l]]) = N_values; colnames(stat_power$local[[l]]) = sigma_sq_values
+	
+	stat_power$global[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+	rownames(stat_power$global[[l]]) = N_values; colnames(stat_power$global[[l]]) = sigma_sq_values
+}
+
+names(stat_power$global) = stat_names
+names(stat_power$local) = stat_names
+
+## --------- ----------------------------
+##Start of loop
+##--------------------------------------
+
+
+for( n in 1:length(N_values)){
+
+	AMOC_Zn = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	AMOC_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	PBF = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	Ell = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+	WAIC = matrix(nrow = num_paths, ncol = length(sigma_sq_values))
+	Bayes_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+
+	for( s in 1:length(sigma_sq_values)){
+				
+		# Set the parameters to simulate the data		
+		N = N_values[n]; true_tau = floor(N/2)
+		sigma_sq = sigma_sq_values[s]
+		count_approx = 0
+		for(np in 1: num_paths){
+			Xin = c(rnorm(n = N/2, mean = 0, sd = sqrt(sigma_sq)), rnorm(n = N/2, mean = mu, sd = sqrt(sigma_sq))) 
+	
+
+			## --------- Frequentist statistics ----------------------------
+			AMOC_stats = unlist(AMOC_stat(Xin))
+			AMOC_Zn[np,s] = AMOC_stats[1]
+			AMOC_tau[np,s] = AMOC_stats[2]
+
+			## --------- Bayesian statistics ----------------------------
+			approx_tau_post = FALSE
+			if((length(which(post_pmf_tau(Xin)==0)) == (N-1)) == TRUE){
+				approx_tau_post = TRUE
+				count_approx = 1+count_approx
+			}
+
+		
+			Bayes_stats = bayes_stats(Xin,num_post_samp, approx_tau = approx_tau_post)
+			Ell[np,s] = Bayes_stats$Ell - Bayes_stats$Ell_null
+			PBF[np,s] = Bayes_stats$lPBS - Bayes_stats$lPBS_null
+			WAIC[np,s] = Bayes_stats$WAIC
+			Bayes_tau[np,s] = Bayes_stats$tau
+
+		}# end of the particle loop
+		print(paste("N = ", N, "s = ",sigma_sq))
+
+		print(paste("Number of times post tau is approximated ", count_approx))
+	} # End of the sigma_sq loop
+
+
+power_fnc_perN = function(index, test_stat, critical_value, ineq = "geq"){
+	if(is.na(critical_value[n,index]) ==TRUE){
+		return(NA)
+		}else if (ineq == 'geq'){
+			return(length(which(test_stat[,index] >= critical_value[n,index])))	
+		}else{
+			return(length(which(test_stat[,index] <= critical_value[n,index])))	
+		}
+	}
+
+
+power_fnc_perN_global = function(index, test_stat, critical_value, ineq = "geq"){
+	if(is.na(critical_value) ==TRUE){
+		return(NA)
+		}else if (ineq == "geq"){
+			return(length(which(test_stat[,index] >= critical_value)))	
+		}else{
+			return(length(which(test_stat[,index] <= critical_value)))	
+			}
+	}
+
+
+stat_power$local$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = AMOC_Zn, critical_value = critical_local$AMOC)/num_paths
+stat_power$local$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = Ell, critical_value = critical_local$Ell)/num_paths
+stat_power$local$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = PBF, critical_value = critical_local$PBF)/num_paths
+stat_power$local$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = WAIC, critical_value = critical_local$WAIC, ineq = "geq")/num_paths
+
+
+stat_power$global$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = AMOC_Zn, critical_value = critical_global$AMOC)/num_paths
+stat_power$global$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = Ell, critical_value = critical_global$Ell)/num_paths
+stat_power$global$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = PBF, critical_value = critical_global$PBF)/num_paths
+stat_power$global$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = WAIC, critical_value = critical_global$WAIC, ineq = "geq")/num_paths
+
+
+}#End of N loop
+
+
+return(stat_power)
+
+
+}# end of the function
