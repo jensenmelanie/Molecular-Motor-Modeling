@@ -1,22 +1,4 @@
-## Finding the power of our test, for the given critical value
-## IE the difference between the means is 0 and we do want want a switch point detected
-
-
-## --------- ----------------------------
-##Input Variables
-# ##--------------------------------------
-# FDR_alpha = 0.95
-# num_paths = 100
-# num_post_samp = 100
-# Delta_values = c(0.1, 0.05)#,0.02, 0.01)#, 1/150);
-# N_values = 1/Delta_values
-# sigma_sq_values = c(0.01, 0.1,1,5,10)
-# mu = 10
-
-
-
 power_fnc = function(mu, critical,N_values, sigma_sq_values,num_paths = 100, num_post_samp = 100){
-
 
 ## --------- ----------------------------
 ##Output Variables
@@ -26,6 +8,7 @@ stat_power = list()
 stat_power$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 stat_power$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 stat_power$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+stat_power$WAIC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 
 for(l in 1:length(stat_power)){
 	rownames(stat_power[[l]]) = N_values;
@@ -85,7 +68,6 @@ for( n in 1:length(N_values)){
 	} # End of the sigma_sq loop
 
 
-
 AMOC_power_fnc = function(index){
 	if(is.na(critical$AMOC[n,index]) ==TRUE){return(NA)
 		}else{return(length(which(AMOC_Zn[,index] >= critical$AMOC[n,index])))
@@ -104,21 +86,37 @@ PBF_power_fnc = function(index){
 			}
 }
 
+WAIC_power_fnc = function(index){
+	if(is.na(critical$WAIC[n,index]) ==TRUE){return(NA)
+		}else{return(length(which(PBF[,index] >= critical$WAIC[n,index])))
+			}
+}
 
 
 stat_power$AMOC[n,] =sapply(1:length(sigma_sq_values), AMOC_power_fnc)/num_paths
 stat_power$Ell[n,] = sapply(1:length(sigma_sq_values), Ell_power_fnc)/num_paths
 stat_power$PBF[n,] = sapply(1:length(sigma_sq_values), PBF_power_fnc)/num_paths
+sta_power$WAIC[n,] =  sapply(1:length(sigma_sq_values), WAIC_power_fnc)/num_paths
+
+
+
+AMOC_plot = plot_stats_power(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N), critical$AMOC[n,] ) + ggtitle(paste("AMOC, mu = ",mu, ", N = ",N))
+Ell_plot = plot_stats_power(Ell, Bayes_tau, sigma_sq_values, c(0, N),critical$Ell[n,] ) + ggtitle(paste("Ell, mu = ",mu, ", N = ",N))
+PBF_plot = plot_stats_power(PBF, Bayes_tau, sigma_sq_values, c(0, N) ,critical$PBF[n,]) + ggtitle(paste("PBF, mu = ",mu, ", N = ",N))
+WAIC_plot = plot_stats_power(WAIC, Bayes_tau, sigma_sq_values, c(0, N) ,critical$PBF[n,]) + ggtitle(paste("WAIC, mu = ",mu, ", N = ",N))
+
+
+grid.arrange(AMOC_plot, Ell_plot, PBF_plot, WAIC_plot,nrow = 4)
 
 }#End of N loop
 
+
+model_comp_df = data.frame( N = rep(N_values, times = length(sigma_sq_values)), sigma = rep(sigma_sq_values, each = length(N_values)), stat = c(c(stat_power$Ell),c(stat_power$PBF),c(stat_power$AMOC), c(stat_power$WAIC)),stat_type = rep(c("Ell", "PBF", "AMOC", "WAIC"), each = length(N_values)*length(sigma_sq_values)))
+
+print(ggplot(model_comp_df) + geom_point(aes(x = N, y = stat, color = as.factor(sigma))) + geom_line(aes(x = N, y = stat, color = as.factor(sigma))) + facet_grid(~stat_type) +labs(x = "Number of Observations", y= "Power") + ylim(0,1)+ scale_color_discrete(name = expression(sigma))+ scale_x_log10()+ ggtitle("Power for mu = ",mu))
 
 
 return(stat_power)
 
 
 }# end of the function
-
-
-
-
