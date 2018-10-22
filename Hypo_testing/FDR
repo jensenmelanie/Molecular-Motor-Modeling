@@ -96,24 +96,7 @@ stats$PBF[n,] = apply(PBF, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.0
 stats$WAIC[n,] = apply(WAIC, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
 
 
-AMOC_plot = plot_stats_FDR(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("AMOC, N = ",N))
-Ell_plot = plot_stats_FDR(Ell, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("Ell, N = ",N))
-PBF_plot = plot_stats_FDR(PBF, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("PBF, N = ",N))
-WAIC_plot = plot_stats_FDR(WAIC, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("WAIC, N = ",N))
-
-grid.arrange(AMOC_plot, Ell_plot, PBF_plot,WAIC_plot, nrow = 4)
-
-
 }#End of N loop
-
-
-
-
-model_comp_df = data.frame( N = rep(N_values, times = length(sigma_sq_values)), sigma = rep(sigma_sq_values, each = length(N_values)), stat = c(c(stats$Ell),c(stats$PBF),c(stats$AMOC), c(stats$WAIC)),stat_type = rep(c("Ell", "PBF", "AMOC", "WAIC"), each = length(N_values)*length(sigma_sq_values)))
-
-
-print(ggplot(model_comp_df) + geom_point(aes(x = N, y = stat, color = as.factor(sigma))) + geom_line(aes(x = N, y = stat, color = as.factor(sigma))) + facet_grid(~stat_type) +labs(x = "Number of Observations", y= "Test Statistic") + scale_color_discrete(name = expression(sigma))+ scale_x_log10()+ ggtitle("95% Critical Value"))
-
 
 
 return(stats)
