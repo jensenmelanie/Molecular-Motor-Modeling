@@ -118,8 +118,13 @@ PBS_BM = function(Xn, post_samples, num_switch_pts = 0){
 		par_mat = cbind(post_samples[["theta"]], post_samples[["sigma_sq"]])
 		par_list = lapply(seq_len(nrow(par_mat)), function(i) par_mat[i,] )
 		
-		return(mean(exp(unlist(lapply(par_list,  ll_BM,  Xn =Xn)))))
+		lppd = unlist(lapply(par_list,  ll_BM,  Xn =Xn))
+		PBF = mean(exp(lppd))
+		WAIC = -2*(log(PBF) - var(lppd))
 		
+		return(	c(PBF, WAIC))	
+		
+				
 	}else if(num_switch_pts == 1){
 
 		num_samps = nrow(post_samples[[1]])
@@ -128,7 +133,11 @@ PBS_BM = function(Xn, post_samples, num_switch_pts = 0){
 		for(nn in 1:num_samps){
 			ll_n = c(ll_n,	ll_BMswitch(Xn, post_samples[["tau"]][nn], post_samples[["theta"]][nn,], post_samples[["sigma_sq"]][nn,]) )	
 		}
-		return(	mean(exp(ll_n)))		
+		
+		PBF = mean(exp(ll_n))
+		WAIC = -2*(log(PBF) - var(ll_n))
+		
+		return(	c(PBF, WAIC))		
 
 		
 		}else{
@@ -139,7 +148,10 @@ PBS_BM = function(Xn, post_samples, num_switch_pts = 0){
 		for(nn in 1:num_samps){
 			ll_n = c(ll_n,	ll_BMswitch(Xn, post_samples[["tau"]][nn,], post_samples[["theta"]][nn,], post_samples[["sigma_sq"]][nn,]) )	
 		}
-		return(	mean(exp(ll_n)))		
+		PBF = mean(exp(ll_n))
+		WAIC = -2*(log(PBF) - var(ll_n))
+		
+		return(	c(PBF, WAIC))	
 	}
 	
 }
@@ -259,6 +271,12 @@ post_pmf_tau = function(Xn){
 	#/sum(p_tau_unnormal))
 }
 
+
+
+
+
+
+
 post_approx_pmf_tau = function(Xn){
 	N = length(Xn)
 	tau_vec = 1:(N-1); Ntau_vec = N- tau_vec
@@ -281,7 +299,10 @@ bayes_stats = function(Xn, num_post_samp, approx_tau = FALSE){
 	null_rates = sapply(theta_null, function(theta){sum((Xn- theta)^2)/2})
 	post_samp_null$sigma_sq = matrix(1/sapply(null_rates, rgamma, n = 1, shape = N/2),nrow = num_post_samp, ncol = 1)
 	Ell_null = Ell_BM(Xn, post_samp_null)
-	lPBS_null = log10(PBS_BM(Xn, post_samp_null))
+	
+	PBS_null = PBS_BM(Xn, post_samp_null)
+	lPBS_null = log10(PBS_null[1])
+	WAIC_null = PBS_null[2]
 
 ##MODEL WITH ONE SWITCH
 	Htau_all_tau = sapply(1:(N-1),Htau_fnc,Xn = Xn)
@@ -318,10 +339,10 @@ bayes_stats = function(Xn, num_post_samp, approx_tau = FALSE){
 
 	PBS = PBS_BM(Xn, post_samp, num_switch_pts = 1)
 	Ell = Ell_BM(Xn, post_samp, num_switch_pts = 1)
-	pwaic = pwaic_BM(Xn, post_samp, num_switch_pts = 1)
+#	pwaic = pwaic_BM(Xn, post_samp, num_switch_pts = 1)
 	tau = which.max(post_pmf_tau)
 
-	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS), Ell = Ell, WAIC = -2*(log(PBS) - pwaic), tau = tau ))
+	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC = PBS[2]- WAIC_null, tau = tau ))
 
 }
 
@@ -339,7 +360,12 @@ bayes_stats_sampling_FDR = function(Xn, num_post_samp,sampling_pars){
 	null_rates = sapply(theta_null, function(theta){sum((Xn- theta)^2)/2})
 	post_samp_null$sigma_sq = matrix(1/sapply(null_rates, rgamma, n = 1, shape = N/2),nrow = num_post_samp, ncol = 1)
 	Ell_null = Ell_BM(Xn, post_samp_null,num_switch_pts = 0)
-	lPBS_null = log10(PBS_BM(Xn, post_samp_null, num_switch_pts = 0))
+
+	PBS_null = PBS_BM(Xn, post_samp_null)
+	lPBS_null = log10(PBS_null[1])
+	WAIC_null = PBS_null[2]
+
+
 
 ##MODEL WITH ONE SWITCH
 	post_samp= list()
@@ -382,11 +408,10 @@ bayes_stats_sampling_FDR = function(Xn, num_post_samp,sampling_pars){
 
 	PBS = PBS_BM(Xn, post_samp, num_switch_pts = 1)
 	Ell = Ell_BM(Xn, post_samp, num_switch_pts = 1)
-	pwaic = pwaic_BM(Xn, post_samp, num_switch_pts = 1)
 	tau = (density(all_tau_samps)$x)[which.max(density(all_tau_samps)$y)]
 
 
-	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS), Ell = Ell, WAIC = -2*(log(PBS) - pwaic), tau = tau ))
+	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC = PBS[2]- WAIC_null, tau = tau ))
 
 }
 
