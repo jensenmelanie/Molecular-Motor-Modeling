@@ -342,7 +342,7 @@ bayes_stats = function(Xn, num_post_samp, approx_tau = FALSE){
 #	pwaic = pwaic_BM(Xn, post_samp, num_switch_pts = 1)
 	tau = which.max(post_pmf_tau)
 
-	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC = PBS[2]- WAIC_null, tau = tau ))
+	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC =WAIC_null-  PBS[2], tau = tau ))
 
 }
 
@@ -411,7 +411,7 @@ bayes_stats_sampling_FDR = function(Xn, num_post_samp,sampling_pars){
 	tau = (density(all_tau_samps)$x)[which.max(density(all_tau_samps)$y)]
 
 
-	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC = PBS[2]- WAIC_null, tau = tau ))
+	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC = WAIC_null-PBS[2], tau = tau ))
 
 }
 
