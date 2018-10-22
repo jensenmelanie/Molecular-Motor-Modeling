@@ -13,9 +13,8 @@
 # sigma_sq_values = c(0.01, 0.1,1,5,10)
 
 
-FDR_critical = function(FDR_alpha, N_values, sigma_sq_values, num_paths = 100, num_post_samp = 100){
+FDR_critical = function(FDR_alpha, N_values, sigma_sq_values, num_paths = 100, num_post_samp = 100, mu = 0){
 
-mu = 0
 
 ## --------- ----------------------------
 ##Output Variables
@@ -25,6 +24,8 @@ stats = list()
 stats$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 stats$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 stats$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+stats$WAIC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+
 
 for(l in 1:length(stats)){
 	rownames(stats[[l]]) = N_values;colnames(stats[[l]]) = sigma_sq_values
@@ -44,6 +45,8 @@ for( n in 1:length(N_values)){
 
 	PBF = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 	Ell = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+	WAIC = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+
 	Bayes_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
 
 	for( s in 1:length(sigma_sq_values)){
@@ -53,7 +56,7 @@ for( n in 1:length(N_values)){
 		sigma_sq = sigma_sq_values[s]
 		count_approx = 0
 		for(np in 1: num_paths){
-			Xin = rnorm(n = N, mean = 0, sd = sqrt(sigma_sq)) 
+			Xin = rnorm(n = N, mean = mu, sd = sqrt(sigma_sq)) 
 	
 
 			## --------- Frequentist statistics ----------------------------
@@ -67,11 +70,17 @@ for( n in 1:length(N_values)){
 				approx_tau_post = TRUE
 				count_approx = 1+count_approx
 			}
+			
+			if((length(which(post_pmf_tau(Xin)== Inf)) == (N-1)) == TRUE){
+				approx_tau_post = TRUE
+				count_approx = 1+count_approx
+			}
 
 		
 			Bayes_stats = bayes_stats(Xin,num_post_samp, approx_tau = approx_tau_post)
 			Ell[np,s] = Bayes_stats$Ell - Bayes_stats$Ell_null
 			PBF[np,s] = Bayes_stats$lPBS - Bayes_stats$lPBS_null
+			WAIC[np,s] = Bayes_stats$WAIC
 			Bayes_tau[np,s] = Bayes_stats$tau
 
 		}# end of the particle loop
@@ -84,12 +93,28 @@ for( n in 1:length(N_values)){
 stats$AMOC[n,] = apply(AMOC_Zn, 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
 stats$Ell[n,] = apply(Ell, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
 stats$PBF[n,] = apply(PBF, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+stats$WAIC[n,] = apply(WAIC, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
 
 
+AMOC_plot = plot_stats_FDR(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("AMOC, N = ",N))
+Ell_plot = plot_stats_FDR(Ell, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("Ell, N = ",N))
+PBF_plot = plot_stats_FDR(PBF, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("PBF, N = ",N))
+WAIC_plot = plot_stats_FDR(WAIC, Bayes_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("WAIC, N = ",N))
 
-print(rbind(stats$AMOC[n,],stats$Ell[n,],stats$PBF[n,]))
+grid.arrange(AMOC_plot, Ell_plot, PBF_plot,WAIC_plot, nrow = 4)
+
 
 }#End of N loop
+
+
+
+
+model_comp_df = data.frame( N = rep(N_values, times = length(sigma_sq_values)), sigma = rep(sigma_sq_values, each = length(N_values)), stat = c(c(stats$Ell),c(stats$PBF),c(stats$AMOC), c(stats$WAIC)),stat_type = rep(c("Ell", "PBF", "AMOC", "WAIC"), each = length(N_values)*length(sigma_sq_values)))
+
+
+print(ggplot(model_comp_df) + geom_point(aes(x = N, y = stat, color = as.factor(sigma))) + geom_line(aes(x = N, y = stat, color = as.factor(sigma))) + facet_grid(~stat_type) +labs(x = "Number of Observations", y= "Test Statistic") + scale_color_discrete(name = expression(sigma))+ scale_x_log10()+ ggtitle("95% Critical Value"))
+
+
 
 return(stats)
 
