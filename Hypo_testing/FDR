@@ -93,7 +93,7 @@ for( n in 1:length(N_values)){
 stats$AMOC[n,] = apply(AMOC_Zn, 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
 stats$Ell[n,] = apply(Ell, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
 stats$PBF[n,] = apply(PBF, 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
-stats$WAIC[n,] = apply(WAIC, 2, function(x){sort(-1*x)[floor(length(x)*(FDR_alpha+0.01))]})
+stats$WAIC[n,] = apply(WAIC, 2, function(x){sort(x)[floor(length(x)*(1-(FDR_alpha+0.01)))]})
 
 
 AMOC_plot = plot_stats_FDR(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N) ) + ggtitle(paste("AMOC, N = ",N))
@@ -208,7 +208,7 @@ for( n in 1:length(N_values)){
 local_stats$AMOC[n,] = apply(AMOC_Zn[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
 local_stats$Ell[n,] = apply(Ell[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
 local_stats$PBF[n,] = apply(PBF[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
-local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(-1*x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(x)[floor(length(x)*(1-(FDR_alpha+0.01)))]})
 
 
 }#End of N loop
