@@ -122,3 +122,111 @@ return(stats)
 
 
 
+
+
+##======================================================
+## global critical values
+##======================================================
+
+
+
+FDR_critical_global = function(FDR_alpha, N_values, sigma_sq_values, num_paths = 100, num_post_samp = 100, mu = 0){
+
+
+## --------- ----------------------------
+##Output Variables
+##--------------------------------------
+
+stats = list()
+
+local_stats = list()
+local_stats$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$WAIC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+
+
+for(l in 1:length(local_stats)){
+	rownames(local_stats[[l]]) = N_values;colnames(local_stats[[l]]) = sigma_sq_values
+}
+
+
+
+## --------- ----------------------------
+##Start of loop
+##--------------------------------------
+AMOC_Zn = list(); PBF = list(); Ell = list(); WAIC = list()
+
+for( n in 1:length(N_values)){
+
+	AMOC_Zn[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	PBF[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	Ell[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+	WAIC[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+
+	for( s in 1:length(sigma_sq_values)){
+				
+		# Set the parameters to simulate the data		
+		N = N_values[n]; true_tau = floor(N/2)
+		sigma_sq = sigma_sq_values[s]
+		count_approx = 0
+		for(np in 1: num_paths){
+			Xin = rnorm(n = N, mean = mu, sd = sqrt(sigma_sq)) 
+	
+
+			## --------- Frequentist statistics ----------------------------
+			AMOC_stats = unlist(AMOC_stat(Xin))
+			AMOC_Zn[[n]][np,s] = AMOC_stats[1]
+
+			## --------- Bayesian statistics ----------------------------
+			approx_tau_post = FALSE
+			if((length(which(post_pmf_tau(Xin)==0)) == (N-1)) == TRUE){
+				approx_tau_post = TRUE
+				count_approx = 1+count_approx
+			}
+			
+			if((length(which(post_pmf_tau(Xin)== Inf)) == (N-1)) == TRUE){
+				approx_tau_post = TRUE
+				count_approx = 1+count_approx
+			}
+
+		
+			Bayes_stats = bayes_stats(Xin,num_post_samp, approx_tau = approx_tau_post)
+			Ell[[n]][np,s] = Bayes_stats$Ell - Bayes_stats$Ell_null
+			PBF[[n]][np,s] = Bayes_stats$lPBS - Bayes_stats$lPBS_null
+			WAIC[[n]][np,s] = Bayes_stats$WAIC
+
+		}# end of the particle loop
+		print(paste("N = ", N, "s = ",sigma_sq))
+
+		print(paste("Number of times post tau is approximated ", count_approx))
+	} # End of the sigma_sq loop
+
+
+
+local_stats$AMOC[n,] = apply(AMOC_Zn[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
+local_stats$Ell[n,] = apply(Ell[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$PBF[n,] = apply(PBF[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+
+
+}#End of N loop
+
+
+global_FDR_fnc  = function(vector){
+	return(sort(vector)[floor(length(vector)*(FDR_alpha + 0.01))])
+}
+
+stats$AMOC = global_FDR_fnc(unlist(AMOC_Zn))
+stats$Ell =  global_FDR_fnc(unlist(Ell))
+stats$PBF = global_FDR_fnc(unlist(PBF))
+stats$WAIC =  global_FDR_fnc(unlist(WAIC))
+
+
+return(list(global = stats, local = local_stats))
+
+} #end of the function
+
+
+
