@@ -129,7 +129,7 @@ return(stat_power)
 
 
 
-power_global_fnc = function(mu, critical,N_values, sigma_sq_values,num_paths = 100, num_post_samp = 100){
+power_global_fnc = function(mu, critical,N_values, sigma_sq_values,num_paths = 100, num_post_samp = 100, plot_it = TRUE){
 
 
 critical_local = critical$local
@@ -142,10 +142,15 @@ stat_names = names(critical_global)
 ##--------------------------------------
 
 stat_power = list(); stat_power$local = list(); stat_power$global = list()
+stat_med = list()
 
 for( l in 1:length(stat_names)){
 	stat_power$local[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 	rownames(stat_power$local[[l]]) = N_values; colnames(stat_power$local[[l]]) = sigma_sq_values
+	
+	stat_med[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+	rownames(stat_med[[l]]) = N_values; colnames(stat_med[[l]]) = sigma_sq_values
+	
 	
 	stat_power$global[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 	rownames(stat_power$global[[l]]) = N_values; colnames(stat_power$global[[l]]) = sigma_sq_values
@@ -153,7 +158,7 @@ for( l in 1:length(stat_names)){
 
 names(stat_power$global) = stat_names
 names(stat_power$local) = stat_names
-
+names(stat_med) = stat_names
 ## --------- ----------------------------
 ##Start of loop
 ##--------------------------------------
@@ -226,23 +231,47 @@ power_fnc_perN_global = function(index, test_stat, critical_value, ineq = "geq")
 			}
 	}
 
-
+##------------------LOCAL POWER --------------------
 stat_power$local$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = AMOC_Zn, critical_value = critical_local$AMOC)/num_paths
 stat_power$local$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = Ell, critical_value = critical_local$Ell)/num_paths
 stat_power$local$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = PBF, critical_value = critical_local$PBF)/num_paths
 stat_power$local$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = WAIC, critical_value = critical_local$WAIC, ineq = "geq")/num_paths
 
-
+##-----------------GLOBAL POWER---------------------
 stat_power$global$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = AMOC_Zn, critical_value = critical_global$AMOC)/num_paths
 stat_power$global$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = Ell, critical_value = critical_global$Ell)/num_paths
 stat_power$global$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = PBF, critical_value = critical_global$PBF)/num_paths
 stat_power$global$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = WAIC, critical_value = critical_global$WAIC, ineq = "geq")/num_paths
 
+##-----------------MEDIAN TEST STATISTIC---------------------
+stat_med$AMOC[n,] =apply( AMOC_Zn,2, median)
+stat_med$Ell[n,] = apply(Ell,2, median)
+stat_med$PBF[n,] = apply( PBF,2, median)
+stat_med$WAIC[n,] =  apply(WAIC,2, median)
+
+
+if(plot_it == TRUE){
+	
+	AMOC_plot = plot_stats_power(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N), critical_local$AMOC[n,] ) + ggtitle(paste("AMOC, mu = ",mu, ", N = ",N))
+	Ell_plot = plot_stats_power(Ell, Bayes_tau, sigma_sq_values, c(0, N),critical_local$Ell[n,] ) + ggtitle(paste("Ell, mu = ",mu, ", N = ",N))
+	PBF_plot = plot_stats_power(PBF, Bayes_tau, sigma_sq_values, c(0, N) ,critical_local$PBF[n,]) + ggtitle(paste("PBF, mu = ",mu, ", N = ",N))
+	WAIC_plot = plot_stats_power(WAIC, Bayes_tau, sigma_sq_values, c(0, N) ,critical_local$PBF[n,]) + ggtitle(paste("WAIC, mu = ",mu, ", N = ",N))
+	
+	
+	grid.arrange(AMOC_plot, Ell_plot, PBF_plot, WAIC_plot,nrow = 4)
+}
+
 
 }#End of N loop
 
+if(plot_it == TRUE){
+	model_comp_df = data.frame( N = rep(N_values, times = length(sigma_sq_values)), sigma = rep(sigma_sq_values, each = length(N_values)), stat = c(c(stat_power$local$Ell),c(stat_power$local$PBF),c(stat_power$local$AMOC), c(stat_power$local$WAIC)),stat_type = rep(c("Ell", "PBF", "AMOC", "WAIC"), each = length(N_values)*length(sigma_sq_values)))
+	
+	print(ggplot(model_comp_df) + geom_point(aes(x = N, y = stat, color = as.factor(sigma))) + geom_line(aes(x = N, y = stat, color = as.factor(sigma))) + facet_grid(~stat_type) +labs(x = "Number of Observations", y= "Power") + ylim(0,1)+ scale_color_discrete(name = expression(sigma))+ scale_x_log10()+ ggtitle(paste("Power for mu = ",mu)))
+}
 
-return(stat_power)
+return(list(power = stat_power, stat = stat_med))
 
 
 }# end of the function
+
