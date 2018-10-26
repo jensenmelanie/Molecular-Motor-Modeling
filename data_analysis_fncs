@@ -96,6 +96,59 @@ title(sub = paste("Path Length",path_length ))
 	
 }
 
+###===================================================
+## Fills in missing data
+###===================================================
+
+Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10 ){
+	Delta_n = diff(time)
+
+	Delta = round(Delta_n, digits= round_to) 
+	
+	delta_diff = unique(unlist(split(Delta,as.factor(Delta))))
+	final_t = max(t1)
+	
+	Xn_fill = vector(length = max(t1)/delta_diff[1] + 1)
+	Xn_fill[round(t1/delta_diff[1])+ 1] = Xn
+	
+	missing_index = which(Xn_fill == 0)
+	
+	while(length(missing_index)>0){
+		
+		index = missing_index[1]
+	
+		lower = max(which(Xn_fill[1:index] != 0))
+		upper = min((index:length(Xn_fill))[which(Xn_fill[index:length(Xn_fill)] != 0)])
+	
+		num_to_replace = (upper-lower) - 1
+		
+		if(num_to_replace >cut_off){
+			print("Max number of missed observations reached")
+			return(	list(time = c(0:(index-2))*delta_diff[1], Xn_fill = Xn_fill[1:(index-1)]))
+		}
+	
+	
+	
+	
+		Xn_fill[(lower+1):(upper-1)] = Xn_fill[lower]+ (Xn_fill[upper] - Xn_fill[lower])*(c(1:num_to_replace)/(num_to_replace+1)) + rnorm(num_to_replace, mean = 0,sd = sqrt(delta_diff[1]/100))
+		
+		missing_index = which(Xn_fill ==0)
+		missing_index
+		length(Xn_fill)
+	}
+
+	return(list(time = c(0:(length(Xn_fill)-1))*delta_diff[1], Xn_fill = Xn_fill))
+
+}
+
+
+}
+
+
+
+###===================================================
+## Graphics
+###===================================================
 
 
 library(RColorBrewer)
