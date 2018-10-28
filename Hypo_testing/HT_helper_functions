@@ -490,7 +490,7 @@ bayes_stats_MCMC_FDR = function(Xn, num_post_samp,sampling_pars){
 		} #end of setting samples
 		
 	if(num_trials == 5){
-		return(list(lPBS_null = PBS_null, Ell_null = Ell_null, lPBS = 0, Ell = 0, WAIC =  0, bayes_est = NA ))
+		return(list(lPBS_null = PBS_null[1], Ell_null = Ell_null, lPBS = 0, Ell = 0, WAIC =  0, bayes_est = NA ))
 	}
 	
 	
