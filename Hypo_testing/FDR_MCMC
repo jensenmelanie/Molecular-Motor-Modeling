@@ -51,8 +51,8 @@ for( n in 1:length(N_values)){
 		sigma_sq = sigma_sq_values[s]
 		count_approx = 0
 		for(np in 1: num_paths){
-			Xin = rnorm(n = N, mean = mu, sd = sqrt(sigma_sq)) 
-	
+			
+			Xin = c(sapply(mu, rnorm, n = ceiling(N/length(mu)), sd = sqrt(sigma_sq) ))
 
 			## --------- Frequentist statistics ----------------------------
 			AMOC_stats = unlist(AMOC_stat(Xin))
