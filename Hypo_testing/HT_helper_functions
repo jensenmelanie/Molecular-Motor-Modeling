@@ -419,9 +419,17 @@ bayes_stats_sampling_FDR = function(Xn, num_post_samp,sampling_pars){
 
 
 
-##============== MCMC SAMPLING ALGORITHM============================================
+
+
+##==============MCMC  SAMPLING ALGORITHM============================================
 bayes_stats_MCMC_FDR = function(Xn, num_post_samp,sampling_pars){
 	N = length(Xn)
+
+	if((num_post_samp %% sampling_pars$num_chains == 0) == FALSE){
+		num_post_samp = ceiling(num_post_samp/sampling_pars$num_chains)*sampling_pars$num_chains
+		print(paste('Number of samples increased to ', num_post_samp))
+	}
+
 
 ##MODEL WITH ZERO SWITCHes
 	post_samp_null = list()
@@ -502,8 +510,6 @@ bayes_stats_MCMC_FDR = function(Xn, num_post_samp,sampling_pars){
 	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC =  WAIC_null- PBS[2], bayes_est = bayes_est ))
 
 }
-
-
 
 
 
