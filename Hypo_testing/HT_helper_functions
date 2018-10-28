@@ -419,5 +419,93 @@ bayes_stats_sampling_FDR = function(Xn, num_post_samp,sampling_pars){
 
 
 
+##============== MCMC SAMPLING ALGORITHM============================================
+bayes_stats_MCMC_FDR = function(Xn, num_post_samp,sampling_pars){
+	N = length(Xn)
+
+##MODEL WITH ZERO SWITCHes
+	post_samp_null = list()
+	var_theta = 	var(Xn)/N; mu_theta = mean(Xn)
+	theta_null = rt(num_post_samp, df = N-1)*sqrt(var_theta) + mu_theta
+	post_samp_null$theta = matrix(theta_null, nrow = num_post_samp, ncol = 1)
+	
+	null_rates = sapply(theta_null, function(theta){sum((Xn- theta)^2)/2})
+	post_samp_null$sigma_sq = matrix(1/sapply(null_rates, rgamma, n = 1, shape = N/2),nrow = num_post_samp, ncol = 1)
+	Ell_null = Ell_BM(Xn, post_samp_null,num_switch_pts = 0)
+
+	PBS_null = PBS_BM(Xn, post_samp_null)
+	lPBS_null = log10(PBS_null[1])
+	WAIC_null = PBS_null[2]
+
+
+
+##MODEL WITH k SWITCH
+	post_samp= list()
+	post_samp$tau = matrix(nrow = num_post_samp, ncol = sampling_pars$num_switches)
+	post_samp$theta = matrix(nrow = num_post_samp, ncol = sampling_pars$num_switches + 1)
+	post_samp$sigma_sq = matrix(nrow = num_post_samp, ncol = 1)
+	
+	
+	num_good = FALSE; num_trials = 0
+	while( num_good == FALSE){
+		num_trials = num_trials + 1
+		draw_samp = Norm_switchMean_chains(Xn, num_switches = sampling_pars$num_switches, sampling_pars$num_chains, sampling_pars$cand_tau_step_per, sampling_pars$min_dur, sampling_pars$iterations, sampling_pars$warmup_per, sampling_pars$every_kth[1])
+		
+		empty_index = which(is.na(draw_samp$Rhat) == TRUE)
+		num_par = length(draw_samp$Rhat[-empty_index])
+		num_Rhat_good = sum(draw_samp$Rhat[-empty_index] <= 1.1)
+		
+		neff_empty_index = which(is.na(draw_samp$neff) == TRUE)
+		num_neff_good = sum(as.numeric(draw_samp$neff[-neff_empty_index] > (5*2* sampling_pars$num_chains)))
+		
+		ind_conv = as.numeric(num_Rhat_good == num_par) + as.numeric(num_neff_good == num_par)
+		#print(ind_conv)
+		
+		if(ind_conv == 2){
+			num_good = TRUE
+			num_samp = nrow(draw_samp$post_samp[[1]][[1]])
+			seq_k = floor(seq(1, num_samp, length = floor(num_post_samp/sampling_pars$num_chains)))
+			
+			tau_map = c()
+			for(j in 1:(sampling_pars$num_switches)){
+				current_tau = c((sapply(1: sampling_pars$num_chains, function(index){draw_samp$post_samp[[index]]$tau[,j]}))[seq_k,])
+				post_samp$tau[,j] = floor(current_tau)
+				tau_map = c(tau_map, (density(current_tau)$x)[which.max(density(current_tau)$y)])	
+			}
+			
+			for(j in 1:(sampling_pars $num_switches + 1)){
+				post_samp$theta[,j] = c((sapply(1: sampling_pars$num_chains, function(index){draw_samp$post_samp[[index]]$theta[,j]}))[seq_k,])
+				}
+		
+		post_samp$sigma_sq[,1] =1/c((sapply(1:sampling_pars$num_chains, function(index){draw_samp$post_samp[[index]]$eta}))[seq_k,])
+	
+		} #end of setting samples
+		
+	if(num_trials == 5){
+		return(list(lPBS_null = PBS_null, Ell_null = Ell_null, lPBS = 0, Ell = 0, WAIC =  0, bayes_est = NA ))
+	}
+	
+	
+	} # End of the while loop
+
+	
+	bayes_est = rbind(apply(post_samp$theta, 2, mean),c(apply(post_samp$sigma_sq,2,mean),rep(NA, times = sampling_pars$num_switches)), c(tau_map, NA) )
+	rownames(bayes_est) = c("theta", "sigmasq", "tau")
+	colnames(bayes_est) = paste('state', 1:(sampling_pars$num_switches+1))
+	
+	
+
+	PBS = PBS_BM(Xn, post_samp, num_switch_pts = sampling_pars$num_switches)
+	Ell = Ell_BM(Xn, post_samp, num_switch_pts = sampling_pars$num_switches)
+
+
+	return(list(lPBS_null = lPBS_null, Ell_null = Ell_null, lPBS = log10(PBS[1]), Ell = Ell, WAIC =  WAIC_null- PBS[2], bayes_est = bayes_est ))
+
+}
+
+
+
+
+
 
 
