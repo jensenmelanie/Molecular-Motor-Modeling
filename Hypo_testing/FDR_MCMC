@@ -141,7 +141,7 @@ if(init_tau == 'uniform'){
 
 	if(num_switches >1){
 		for(j in 1:(num_switches-1)){
-			initial_tau = c(initial_tau, runif(n =1, min = initial_tau[j], max = N- (min_dur+1)*(num_switches -j)))
+			initial_tau = c(initial_tau, runif(n =1, min = initial_tau[j]+min_dur+1, max = N- (min_dur+1)*(num_switches -j)))
 			}	
 	}
 	post_samp$tau[1,] = initial_tau
