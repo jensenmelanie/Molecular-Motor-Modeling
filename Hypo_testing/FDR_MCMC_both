@@ -1,0 +1,686 @@
+
+
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(RColorBrewer)
+mellow.color.pal = colorRampPalette(rev(brewer.pal(11,'Spectral')))
+
+
+
+FDR_MCMCboth_critical_global = function(FDR_alpha, N_values, sigma_sq_values,sampling_pars, num_paths = 100, num_post_samp = 100, mu = 0){
+
+
+## --------- ----------------------------
+##Output Variables
+##--------------------------------------
+
+stats = list()
+
+local_stats = list()
+local_stats$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$WAIC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+
+
+for(l in 1:length(local_stats)){
+	rownames(local_stats[[l]]) = N_values;colnames(local_stats[[l]]) = sigma_sq_values
+}
+
+
+
+## --------- ----------------------------
+##Start of loop
+##--------------------------------------
+AMOC_Zn = list(); PBF = list(); Ell = list(); WAIC = list()
+
+for( n in 1:length(N_values)){
+
+	AMOC_Zn[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	PBF[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	Ell[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+	WAIC[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
+
+	for( s in 1:length(sigma_sq_values)){
+				
+		# Set the parameters to simulate the data		
+		N = N_values[n]
+		sigma_sq = sigma_sq_values[s]
+		count_approx = 0
+		for(np in 1: num_paths){
+			
+			Xin = c(sapply(mu, rnorm, n = ceiling(N/length(mu)), sd = sqrt(sigma_sq) ))
+
+			## --------- Frequentist statistics ----------------------------
+			AMOC_stats = unlist(AMOC_stat(Xin))
+			AMOC_Zn[[n]][np,s] = AMOC_stats[1]
+
+			## --------- Bayesian statistics ----------------------------
+		
+			Bayes_stats = bayes_stats_MCMCboth_FDR(Xin,num_post_samp,sampling_pars)
+			Ell[[n]][np,s] = Bayes_stats$Ell - Bayes_stats$Ell_null
+			PBF[[n]][np,s] = Bayes_stats$lPBS - Bayes_stats$lPBS_null
+			WAIC[[n]][np,s] = Bayes_stats$WAIC
+
+		}# end of the particle loop
+		print(paste("N = ", N, "s = ",sigma_sq))
+
+		print(paste("Number of times post tau is approximated ", count_approx))
+	} # End of the sigma_sq loop
+
+
+
+local_stats$AMOC[n,] = apply(AMOC_Zn[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
+local_stats$Ell[n,] = apply(Ell[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$PBF[n,] = apply(PBF[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+
+
+}#End of N loop
+
+
+global_FDR_fnc  = function(vector){
+	return(sort(vector)[floor(length(vector)*(FDR_alpha + 0.01))])
+}
+
+stats$AMOC = global_FDR_fnc(unlist(AMOC_Zn))
+stats$Ell =  global_FDR_fnc(unlist(Ell))
+stats$PBF = global_FDR_fnc(unlist(PBF))
+stats$WAIC =  global_FDR_fnc(unlist(WAIC))
+
+
+return(list(global = stats, local = local_stats))
+
+} #end of the function
+
+
+
+
+##================================================
+## Algorithm Function
+##=================================================
+
+Norm_switch_contTau = function(Xin, num_switches,init_tau = 'uniform', cand_tau_step_per = 0.2,min_dur = 2,iterations = 4000, warmup_per = 0.5,plot_it = TRUE){
+
+N = length(Xin)
+num_states = num_switches + 1
+
+if(num_states*(min_dur+1)>= N){
+	stop("Not enough observations for each state to be observed for the given number of minimum observations")
+}
+
+
+##---------------------------------------------------------------------
+## Storing the posterior samples
+##---------------------------------------------------------------------
+tau_support = c((min_dur+1),(N-min_dur+1))
+## we add one because we want 10 increments per state
+
+post_samp = list()
+post_samp$theta = matrix(nrow = iterations, ncol = num_states)
+post_samp$eta = matrix(nrow = iterations, ncol = num_states)
+post_samp$tau = matrix(nrow = iterations, ncol = num_switches)
+
+overlapping_intervals= matrix(nrow = iterations, ncol = num_switches)
+accept_rates = matrix(nrow = iterations, ncol = num_switches)
+
+##---------------------------------------------------------------------
+## Initializing
+##---------------------------------------------------------------------
+if(init_tau == 'uniform'){
+	initial_tau = tau_support[1]+round(diff(range(tau_support))*((1:num_switches)/num_states))
+	post_samp$tau[1,] = initial_tau
+}else{
+	
+	initial_tau = runif(n= 1, min = tau_support[1], max = N -(min_dur+1)*num_switches )
+
+	if(num_switches >1){
+		for(j in 1:(num_switches-1)){
+			initial_tau = c(initial_tau, runif(n =1, min = initial_tau[j], max = N- (min_dur+1)*(num_switches -j)))
+			}	
+	}
+	post_samp$tau[1,] = initial_tau
+}
+
+
+initial_theta = rnorm(n = num_states, mean  = 2, sd = 0.3)
+post_samp$theta[1,] = initial_theta
+initial_eta = rgamma(n = num_states, shape = .1, rate = .1)
+post_samp$eta[1,] = initial_eta
+
+cand_var_tau = ceiling(N*cand_tau_step_per)
+
+if(length(cand_var_tau) == 1){
+	cand_var_tau = rep(cand_var_tau, num_switches)	
+}else if(length(cand_var_tau)!= num_switches){
+	stop("The chosen cand_var_tau needs to be length 1 or number of switch points")
+}
+
+##---------------------------------------------------------------------
+## Sampling
+##---------------------------------------------------------------------
+
+for( it in 2:iterations){
+
+tau_vec_it =c(0, post_samp$tau[it-1,], N)
+
+tau_index = floor(post_samp$tau[it-1, ])
+tau_index_vec_it = c(0,tau_index, N)
+
+state_list = list()
+Xin_st = list()
+
+
+## We are assuming that the switch point occrs at n_tau
+
+for(st in 1:num_states){
+	state_list[[st]] = (tau_index_vec_it[st] + 1): tau_index_vec_it[st+1]	
+	Xin_st[[st]] = Xin[state_list[[st]]]
+	}
+
+
+
+
+##-----------------------------eta block-----------------------------
+eta_post_alpha = lengths(Xin_st)/2 
+eta_post_beta_st = c()
+
+for(st in 1:num_states){
+	eta_post_beta_st = c(eta_post_beta_st,(1/2)*sum((Xin_st[[st]] - post_samp$theta[it-1,st])^2))
+}
+
+
+post_samp$eta[it,] = unlist(lapply(col_to_list(rbind(eta_post_alpha, eta_post_beta_st)), rgamma_list, n = 1))
+
+##-----------------------------theta block-----------------------------
+
+## Jeffreys prior (ie flat on lambda)
+theta_post_var = (lengths(state_list)*post_samp$eta[it,])^(-1)
+theta_post_mean = unlist(lapply(Xin_st, sum))/lengths(state_list)
+
+post_samp$theta[it,] = unlist(lapply(col_to_list(rbind(theta_post_mean,theta_post_var)), rnorm_list, n = 1))
+##-----------------------------tau block-----------------------------
+
+for(st in 1:num_switches){
+	
+	tau_loop_vec = tau_vec_it[st:(st+2)]
+	tau_index_loop_vec = tau_index_vec_it[st:(st+2)]
+
+	cand_tau = sampler_uniform(tau_loop_vec[2], cand_var_tau[st])
+	cand_tau_vec = tau_loop_vec; cand_tau_vec[2] = cand_tau
+	cand_tau_index_vec = floor(cand_tau_vec)
+	
+	overlapping_indicator = as.numeric(cand_tau_index_vec[2]<= (cand_tau_index_vec[1]+min_dur -1) ) + as.numeric(cand_tau_index_vec[2] >=(cand_tau_index_vec[3]-min_dur+1))+ as.numeric(cand_tau <= tau_support[1]) + as.numeric(cand_tau >= tau_support[2])
+	
+	 #overlapping_indicator = as.numeric(cand_tau<= mydata$time[cand_tau_index_vec[1]+min_dur +1] ) +  as.numeric(cand_tau >= mydata$time[cand_tau_index_vec[3]-min_dur+1]) + as.numeric(cand_tau <= tau_support[1]) + as.numeric(cand_tau >= tau_support[2])
+	
+	if( overlapping_indicator > 0){
+		ratio = 0; overlapping_intervals[it, st] = 1
+	}else{
+	
+		switch_thetas = post_samp$theta[it,c(st,st+1)]; 
+		switch_etas = post_samp$eta[it,c(st,st+1)]
+		
+
+		log_like_ratio = ll_Nswitch_interval(Xin, cand_tau_index_vec, switch_thetas, switch_etas) - ll_Nswitch_interval(Xin, tau_index_loop_vec, switch_thetas, switch_etas)
+				
+		ratio = exp(log_like_ratio)	
+		
+	} #End of get the ratio
+	
+	
+	accept_fnc_tau = min(1, ratio)
+	
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_tau){
+		post_samp$tau[it, st] = cand_tau; accept_rates[it,st] = 1
+		tau_vec_it[st+1] = cand_tau
+	}else {
+		post_samp$tau[it, st] = post_samp$tau[it-1,st]; accept_rates[it,st] = 0
+	}
+
+	
+} # End of the tau loop
+
+
+} # End of the iterations loop
+
+return(list(post_samp= post_samp, tau_accept = accept_rates, initial_tau = initial_tau))
+
+} #End of the function
+
+
+
+
+##=============================================
+## Algorithm for Multiple Chains with Nefff
+##=============================================
+
+
+Norm_switch_chains = function(Xin, num_switches, num_chains = 2, cand_tau_step_per = 0.1,min_dur = 2, iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
+
+
+if(num_chains == 1){
+	stop_message = "Number of chains must be > 1"
+	stop(stop_message) 
+}
+
+
+
+sampling_seq = seq(ceiling(iterations*warmup_per)+ every_kth, iterations, by = every_kth)
+
+
+all_chains = list()
+all_post = list()
+
+
+all_chains[[1]] = Norm_switch_contTau(Xin, num_switches,init_tau = 'uniform',cand_tau_step_per,min_dur = min_dur,iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)
+
+
+
+if(plot_it == TRUE){
+theta_violin = plot_post_violin(all_chains[[1]]$post_samp$theta, parname= c(paste("theta", 1:(num_switches+1))), every_kth = every_kth)
+	eta_violin = plot_post_violin(1/(all_chains[[1]]$post_samp$eta), parname= c(paste("1/eta", 1:(num_switches+1))),every_kth = every_kth)
+tau_violin = plot_post_violin(all_chains[[1]]$post_samp$tau, parname= c(paste("tau", 1:num_switches)),every_kth = every_kth,par_range = c(1, N))
+grid.arrange(tau_violin, theta_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+}
+
+
+all_post[[1]] = list(theta = all_chains[[1]]$post_samp$theta[sampling_seq,], eta = matrix(all_chains[[1]]$post_samp$eta[sampling_seq,],ncol = num_switches+1), tau = matrix(all_chains[[1]]$post_samp$tau[sampling_seq,],ncol = num_switches))
+
+initial_taus = all_chains[[1]]$initial_tau
+accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
+
+for( m in 2:num_chains){
+	all_chains[[m]] = Norm_switch_contTau(Xin, num_switches,init_tau = 'random',cand_tau_step_per,min_dur = min_dur,iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)	
+	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
+	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
+	
+	all_post[[m]] =list(theta = all_chains[[m]]$post_samp$theta[sampling_seq,], eta = matrix(all_chains[[m]]$post_samp$eta[sampling_seq,],ncol = num_switches+1), tau = matrix(all_chains[[m]]$post_samp$tau[sampling_seq,],ncol = num_switches))
+
+if(plot_it == TRUE){	
+	theta_violin = plot_post_violin(all_chains[[m]]$post_samp$theta, parname= c(paste("theta", 1:(num_switches+1))), every_kth = every_kth)
+	eta_violin = plot_post_violin(1/(all_chains[[m]]$post_samp$eta), parname= c(paste("1/eta", 1:(num_switches+1))),every_kth = every_kth)
+	tau_violin = plot_post_violin(all_chains[[m]]$post_samp$tau, parname= c(paste("tau", 1:num_switches)), every_kth = every_kth,par_range = c(1, N))
+	grid.arrange(tau_violin, theta_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
+}
+
+}
+
+
+names(all_chains) = paste("chain", 1:num_chains, sep = '')
+names(all_post) = paste("chain", 1:num_chains, sep = '')
+
+colnames(initial_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(initial_taus) = names(all_post)
+#print(initial_taus)
+
+colnames(accept_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(accept_taus) = paste("chain", 1:num_chains, sep = '')
+#print("Acceptance Rate for tau")
+#print(accept_taus)
+##-------------------------------------------
+##Convergence statistics (Rhat and neff)
+##-------------------------------------------
+
+parnames = names(all_post[[1]])
+Rhat_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(Rhat_values) = parnames
+colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
+
+neff_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(neff_values) = parnames
+colnames(neff_values) = paste("state",1:(num_switches +1), sep = '')
+
+
+
+pp = 0
+for(pn in parnames){
+	num_states = ncol(all_post$chain1[[pn]])
+	pp = pp + 1
+if(pn == 'tau'){
+		for (st in 1:num_states){
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+				
+		conv_stats = convergence_stats_fnc(chain_mat)
+		
+		Rhat_values[pp,st] = conv_stats$Rhat
+		neff_values[pp,st] = conv_stats$neff
+		
+		}
+	}else{
+		for (st in 1:num_states){
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+		
+		conv_stats = convergence_stats_fnc(chain_mat)
+		
+		Rhat_values[pp,st] = conv_stats$Rhat
+		neff_values[pp,st] = conv_stats$neff
+		
+		}	
+	} #checking if the parameter is tau	
+		
+		
+} # End of the parameter loops
+#print("Potential Scale Reduction Factor (< 1.1)")
+#print(Rhat_values)
+#print("Number of Effective Samples (> 5*2*num_chains)")
+#print(neff_values)
+return(list(post_samp= all_post,Rhat =  Rhat_values,neff = neff_values,init_tau = initial_taus, acceptance_tau = accept_taus))
+
+} #End of the function
+
+
+ 
+
+##=============================================
+## Algorithm for Multiple Chains without Nefff
+##=============================================
+
+Norm_switch_chains_Rhat = function(Xin, num_switches, num_chains = 2, cand_tau_step_per = 0.05,min_dur = 2, iterations = 10000, warmup_per = 0.5,every_kth = 1,plot_it = FALSE){
+
+if(num_chains == 1){
+	stop_message = "Number of chains must be > 1"
+	stop(stop_message) 
+}
+
+
+
+sampling_seq = seq(ceiling(iterations*warmup_per)+ every_kth, iterations, by = every_kth)
+
+
+all_chains = list()
+all_post = list()
+
+
+all_chains[[1]] = Norm_switch_contTau(Xin, num_switches,init_tau = 'uniform',cand_tau_step_per,min_dur = min_dur,iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)
+
+
+
+if(plot_it == TRUE){
+theta_violin = plot_post_violin(all_chains[[1]]$post_samp$theta, parname= c(paste("theta", 1:(num_switches+1))), every_kth = every_kth)
+eta_violin = plot_post_violin(all_chains[[1]]$post_samp$eta, parname= c(paste("eta", 1:(num_switches+1))), every_kth = every_kth)
+tau_violin = plot_post_violin(all_chains[[1]]$post_samp$tau, parname= c(paste("tau", 1:num_switches)),every_kth = every_kth,par_range = c(1, N))
+grid.arrange(tau_violin, theta_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob("Chain 1",gp = gpar(fontsize = 18)))
+}
+
+
+all_post[[1]] = list(theta = all_chains[[1]]$post_samp$theta[sampling_seq,], eta = matrix(all_chains[[1]]$post_samp$eta[sampling_seq,],ncol = num_switches+1), tau = matrix(all_chains[[1]]$post_samp$tau[sampling_seq,],ncol = num_switches))
+
+initial_taus = all_chains[[1]]$initial_tau
+accept_taus = apply(matrix(all_chains[[1]]$tau_accept[sampling_seq,], ncol = num_switches), 2,sum)/length(sampling_seq)
+
+for( m in 2:num_chains){
+	all_chains[[m]] =Norm_switch_contTau(Xin, num_switches,init_tau = 'random',cand_tau_step_per,min_dur = min_dur,iterations =  iterations,warmup_per =  warmup_per, plot_it = FALSE)	
+	initial_taus = rbind(initial_taus,all_chains[[m]]$initial_tau)
+	accept_taus = rbind(accept_taus, apply(matrix(all_chains[[m]]$tau_accept[ sampling_seq,],ncol = num_switches), 2,sum)/length(sampling_seq))
+	
+	all_post[[m]] =list(theta = all_chains[[m]]$post_samp$theta[sampling_seq,], eta = matrix(all_chains[[m]]$post_samp$eta[sampling_seq,],ncol = num_switches+1), tau = matrix(all_chains[[m]]$post_samp$tau[sampling_seq,],ncol = num_switches))
+
+if(plot_it == TRUE){	
+	theta_violin = plot_post_violin(all_chains[[m]]$post_samp$theta, parname= c(paste("theta", 1:(num_switches+1))), every_kth = every_kth)
+	eta_violin = plot_post_violin(all_chains[[m]]$post_samp$eta, parname= c(paste("eta", 1:(num_switches+1))), every_kth = every_kth)
+	tau_violin = plot_post_violin(all_chains[[m]]$post_samp$tau, parname= c(paste("tau", 1:num_switches)), every_kth = every_kth,par_range = c(1, N))
+	grid.arrange(tau_violin, theta_violin, eta_violin, layout_matrix = cbind(c(1,1,1),c(2,2,3)), top = textGrob(paste("Chain ",m), gp = gpar(fontsize = 18)))
+}
+
+}
+
+
+names(all_chains) = paste("chain", 1:num_chains, sep = '')
+names(all_post) = paste("chain", 1:num_chains, sep = '')
+
+colnames(initial_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(initial_taus) = names(all_post)
+#print(initial_taus)
+
+colnames(accept_taus) = paste('tau', 1:num_switches, sep = '')
+rownames(accept_taus) = paste("chain", 1:num_chains, sep = '')
+#print("Acceptance Rate for tau")
+#print(accept_taus)
+
+
+##-------------------------------------------
+##Convergence statistics (Rhat and neff)
+##-------------------------------------------
+
+parnames = names(all_post[[1]])
+Rhat_values = matrix(nrow = length(parnames), ncol = num_switches +1)
+rownames(Rhat_values) = parnames
+colnames(Rhat_values) = paste("state",1:(num_switches +1), sep = '')
+
+pp = 0
+for(pn in parnames){
+	num_states = ncol(all_post$chain1[[pn]])
+	pp = pp + 1
+if(pn == 'tau'){
+		for (st in 1:num_states){
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+		
+		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
+		
+		}
+	}else{
+		for (st in 1:num_states){
+		chain_mat= matrix(unlist(lapply(all_post, get_postsamp, parname = pn,state_index = st)), nrow = length(sampling_seq), ncol = num_chains)
+				
+		Rhat_values[pp,st] = Rhat_fnc(chain_mat)
+		
+		}	
+	} #checking if the parameter is tau	
+		
+		
+} # End of the parameter loops
+
+
+
+
+
+
+#print("Potential Scale Reduction Factor (< 1.1)")
+#print(Rhat_values)
+return(list(post_samp= all_post,Rhat =  Rhat_values,init_tau = initial_taus, acceptance_tau = accept_taus))
+
+} #End of the function
+
+
+ 
+
+
+
+
+##================================================
+## Helper Functions
+##=================================================
+
+
+##-----------------------------------------------------
+## Functions to help with lists
+##-----------------------------------------------------
+
+
+col_to_list = function(matrix){
+	lapply(seq_len(ncol(matrix)), function(i) matrix[,i] )
+}
+
+sum_diff_range = function(vector, index){
+	return(sum(diff(vector[index])))
+}
+
+
+get_postsamp = function(post_samples,parname, state_index){
+	return(post_samples[[parname]][,state_index])
+}
+
+##-----------------------------------------------------
+## Sampling Functions
+##-----------------------------------------------------
+
+
+rnorm_list = function(n, pars){
+	return(rnorm(n = 1, mean = pars[1], sd = sqrt(pars[2])))
+}
+
+rgamma_list = function(n, pars){
+	return(rgamma(n = 1, shape = pars[1], rate=pars[2]))
+}
+
+sampler_uniform = function(current, step){
+	return(runif(n=1, min = current -step,max = current+step))
+}
+
+
+##-----------------------------------------------------
+## Log likelihoods
+##-----------------------------------------------------
+
+
+ll_Nswitch_interval = function(Xin, taus, thetas, etas){
+	
+	num_per_state = diff(taus) 
+	state_1_index = (taus[1]+1):taus[2]
+	state_2_index = (taus[2]+1):taus[3]
+
+
+	ll_1 = (num_per_state[1]/2)*(log(etas[1]) - log(2*pi)) -(etas[1]/2)*sum((Xin[state_1_index] - thetas[1])^2)
+	
+
+	ll_2 = (num_per_state[2]/2)*(log(etas[2]) - log(2*pi)) -(etas[2]/2)*sum((Xin[state_2_index] - thetas[2])^2)
+
+	return(ll_1 + ll_2)
+
+}
+
+
+
+##-----------------------------------------------------
+## Convergence Statistic
+##-----------------------------------------------------
+
+Rhat_fnc = function(post_matrix){
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	num_chains  = 2*ncol(post_matrix)
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+	
+	return(sqrt(Var_est/ Within_var))
+}
+
+
+
+variogram_fnc = function(post_matrix, lag_t){
+	if(is.matrix(post_matrix) == FALSE){
+		stop("Posterior Samples need to be in a matrix with (i,j)th entry is the ith sample from the jth chain")
+	}
+	
+	num_chains = ncol(post_matrix)
+	num_lags =nrow(post_matrix) - lag_t
+	return((1/num_chains)*(1/num_lags)*sum(apply(post_matrix, 2,diff, lag = lag_t)^2))	
+}
+
+
+convergence_stats_fnc = function(post_matrix){
+	
+	if(is.matrix(post_matrix) == FALSE){
+		stop("Posterior Samples need to be in a matrix with (i,j)th entry is the ith sample from the jth chain")
+	}
+	
+	
+## To calculate the variance of the samples	
+	num_samples  = nrow(post_matrix)
+	
+	first_half = 1:floor(num_samples/2); second_half = (floor(num_samples/2)+1):num_samples
+	 num_split_samp = length(first_half)
+	num_chains  = 2*ncol(post_matrix)
+	
+	first_mat = post_matrix[first_half, ];second_mat = post_matrix[second_half, ]
+	
+	
+
+	chain_mean = c(apply(first_mat, 2, mean),apply(second_mat, 2, mean))
+	grand_mean = mean(post_matrix)
+
+	Between_var = (num_split_samp/(num_chains-1))*sum((chain_mean - rep(grand_mean, length(chain_mean)))^2)
+	
+	Within_var = mean(c(apply(first_mat, 2, var),apply(second_mat, 2, var)))
+	
+	Var_est = ((num_split_samp-1)/num_split_samp)*Within_var + (1/num_split_samp)*Between_var
+
+
+## Rhat Statistic	
+	Rhat = sqrt(Var_est/ Within_var)	
+	
+## N effective - only makes sense to compute when the chain is well mixed
+	
+	if(Rhat <=1.1){
+	
+	rho_hat_t = 1-(sapply(1:num_split_samp, variogram_fnc, post_matrix = post_matrix)/(2*Var_est))
+	
+	odds_seq = seq(1, num_split_samp-2, by = 2)	
+		
+	lag_T = min(odds_seq[which(rho_hat_t[odds_seq + 1] + rho_hat_t[odds_seq + 2] < 0)], num_split_samp)
+	#print(lag_T)
+	if(lag_T == num_split_samp){print(paste("T = ", num_split_samp))}
+	
+	neff = (num_chains*num_split_samp)/(1 + 2*sum(rho_hat_t[1:lag_T]))
+	}else{
+		neff= NA	
+		}
+	
+	return(list(Rhat = Rhat, neff = neff))
+}
+
+
+
+##---------------------------------
+##Posterior Sample Violin plots
+##--------------------------------
+plot_post_violin = function(post_samp, parname, par_range= NA, every_kth = 1, warmup = 0.5){
+
+num_samples = nrow(post_samp)
+num_par = ncol(post_samp)
+
+every_kth_index = seq(ceiling(warmup*num_samples)+1, num_samples, by= every_kth)
+num_samp_k = length(every_kth_index)
+
+
+my_colors = mellow.color.pal(num_par +2)
+	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
+		my_colors = my_colors[- which(my_colors == "#FFFFBF")]
+	}else{
+		my_colors = my_colors[1:(num_par +1)]
+	}
+
+par_lab = 1:num_par
+par_mat = cbind(rep(par_lab,  each =num_samp_k ),c(post_samp[every_kth_index,]))
+par_data = data.frame(group = par_mat[,1], value = par_mat[,2])
+
+if(is.na(par_range[1]) == TRUE){
+	par_range = range(par_data['value'])
+}
+
+ ggplot(par_data, aes(x = as.factor(group), y = value, fill = as.factor(group))) + geom_violin()  + scale_fill_manual(values = my_colors, name = "Parameter", labels = parname)  + labs(y = "Parameter Value", x = "State Index") + labs(title = "Posterior Sample Violin Plot") + ylim(par_range[1], par_range[2])
+
+
+} #End of function
+
+
+
+
+
