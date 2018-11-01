@@ -40,7 +40,7 @@ if(init_tau == 'uniform'){
 	post_samp$tau[1,] = initial_tau
 }else{
 	
-	initial_tau = runif(n= 1, min = tau_support[1], max = mydata$time[num_obs -(min_dur+1)*num_switches] )
+	initial_tau = runif(n= 1, min = tau_support[1] +min_dur, max = mydata$time[num_obs -(min_dur+1)*num_switches] )
 
 	if(num_switches >1){
 		for(j in 1:(num_switches-1)){
