@@ -546,7 +546,7 @@ bayes_stats_MCMCboth_FDR = function(Xn, num_post_samp,sampling_pars){
 	post_samp= list()
 	post_samp$tau = matrix(nrow = num_post_samp, ncol = sampling_pars$num_switches)
 	post_samp$theta = matrix(nrow = num_post_samp, ncol = sampling_pars$num_switches + 1)
-	post_samp$sigma_sq = matrix(nrow = num_post_samp, ncol = num_switches+1)
+	post_samp$sigma_sq = matrix(nrow = num_post_samp, ncol = sampling_pars$num_switches+1)
 	
 	
 	num_good = FALSE; num_trials = 0
