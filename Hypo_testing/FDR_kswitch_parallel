@@ -138,7 +138,7 @@ get_post_samp_MCMC = function(Xn, num_post_samp,num_switches, sampling_pars ){
 		} #end of setting samples
 		
 		
-	if(num_trials == 5){
+	if(num_trials == 2){
 		num_good = TRUE
 		alg_converge = FALSE
 		tau_map = NA
@@ -159,7 +159,7 @@ get_post_samp_MCMC = function(Xn, num_post_samp,num_switches, sampling_pars ){
 		
 		post_samp$sigma_sq[,1] =1/c((sapply(1:sampling_pars$num_chains, function(index){draw_samp$post_samp[[index]]$eta}))[seq_k,])
 	
-	} # End of the break if it has 5 tries		
+	} # End of the break if it has 2 tries		
 		
 	
 	
