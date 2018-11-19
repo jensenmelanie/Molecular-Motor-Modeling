@@ -130,7 +130,7 @@ Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10 ){
 	
 	
 	
-		Xn_fill[(lower+1):(upper-1)] = Xn_fill[lower]+ (Xn_fill[upper] - Xn_fill[lower])*(c(1:num_to_replace)/(num_to_replace+1)) + rnorm(num_to_replace, mean = 0,sd = sqrt(delta_diff[1]/100))
+		Xn_fill[(lower+1):(upper-1)] = Xn_fill[lower]+ (Xn_fill[upper] - Xn_fill[lower])*(c(1:num_to_replace)/(num_to_replace+1))+ rnorm(num_to_replace, mean = 0,sd = sqrt(Xn_fill[lower]/10))
 		
 		missing_index = which(Xn_fill ==0)
 		missing_index
