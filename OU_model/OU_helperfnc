@@ -1,0 +1,219 @@
+
+##=============================================
+##Priors
+##=============================================
+
+
+#---------------------------------------------------------
+#D: prior = Gamma, Candidate = Gaussian Random Walk
+#----------------------------------------------------------
+
+log_prior_D = function(my_D, shape_D, rate_D){
+	prior_D = dgamma(my_D, shape = shape_D, rate = rate_D, log = TRUE)	
+}
+
+
+#---------------------------------------------------------
+##k/g : piror = Jeffreys like, Candidate = Gaussian Random Walk
+#--------------------------------------------------------
+log_prior_kg = function(my_kg,Delta,num_steps){
+	phi = exp(-Delta*my_kg)
+	return(prior_kg = (-1/2)*log(num_steps/(1- phi^2)))
+}
+
+
+log_gamma_prior_kg = function(my_kg,kg_shape, kg_rate){
+	return(dgamma(my_kg, kg_shape, kg_rate, log = TRUE))	
+}
+
+
+##rho  : and then transforming back to kg
+
+log_prior_rho_lognorm = function(my_rho, rho_mean, rho_var){ 
+	location = log(rho_mean ^2/sqrt(rho_mean ^2 + rho_var))
+	shape = sqrt(log(1 + rho_var/rho_mean ^2))
+	return(dlnorm(my_rho,location, shape, log = TRUE))
+	}
+
+#-----------------------------------------------
+## tau: prior discrete uniform on 1:numsteps, Candidate: Normal Random Walk
+#-----------------------------------------------
+
+#-----------------------------------------------
+## nu: prior normal, Candidate: Normal Random Walk
+#-----------------------------------------------
+
+log_prior_nu = function(my_nu, nu_mean,nu_sd){
+	prior_nu = dnorm(my_nu, mean = nu_mean, sd = nu_sd, log = TRUE)
+}
+
+
+
+
+
+
+##=============================================
+##Candidate Generating Density
+##=============================================
+
+cand_normRW = function(current_value, parameter_var){
+	return(rnorm(n = 1, mean = current_value, sd = sqrt(parameter_var)))
+}
+
+cand_discreteRW = function(current_value, parameter_var){
+	
+	sample_interval = current_value + c(-parameter_var,parameter_var)
+	return(sample(sample_interval[1]:sample_interval[2], 1))
+}
+
+
+
+
+cand_lognorm = function(current, variance){
+	location = log(current^2/sqrt(current^2 + variance))
+	shape = sqrt(log(1 + variance/current^2))
+	
+	return(rlnorm(n = 1, meanlog = location, sdlog = shape))
+}
+
+
+log_trans_rho = function(current_rho, new_rho, cand_var){
+	location = log(current_rho^2/sqrt(current_rho^2 + cand_var))
+	shape = sqrt(log(1 + (cand_var/current_rho^2)))
+	return(dlnorm(new_rho,meanlog = location, sdlog = shape,log = TRUE ))
+}
+
+
+##=============================================
+##Likelihood functions
+##=============================================
+##tau vector should have k+2 compontents, where t_1 = 0 and t_k+2 = path length
+
+ll_2DOUdrift_multiple_full = function( mydata, time_seq, my_D, my_kg_vec, my_nu_vec, my_tau_vec,plot_it = FALSE){
+	
+	if(length(my_kg_vec) ==1){
+		my_kg_vec = rep(my_kg_vec, length(my_nu_vec))
+	}
+	
+	Delta_plus = c(0,diff(time_seq))
+	num_steps = length(mydata) 
+	
+	
+	X_switch_vec = rep(mydata[c(1,my_tau_vec[-c(1, length(my_tau_vec))])], diff(my_tau_vec))
+	
+	time_switch_vec = rep(time_seq[c(1,my_tau_vec[-c(1, length(my_tau_vec))])], diff(my_tau_vec))
+
+	nu_vec = rep(my_nu_vec, diff(my_tau_vec))
+	kg_vec = rep(my_kg_vec, diff(my_tau_vec))
+	
+	rho_plus = exp(-kg_vec*Delta_plus)
+	sigma_sq_plus = (my_D/kg_vec)*(1- exp(-2* kg_vec*Delta_plus))
+	
+	A_plus = time_seq[2:num_steps] - time_seq[1:(num_steps-1)]*rho_plus[2:num_steps] - (1/kg_vec[2:num_steps])*(1 - rho_plus[2:num_steps])
+ 	##Note that kg_vec[1] corresponds to the starting position
+	
+	mu_long = mydata[1:(num_steps-1)]*rho_plus[2:num_steps] + nu_vec[2:num_steps]*A_plus+ (X_switch_vec[2:num_steps]- nu_vec[2:num_steps]*time_switch_vec[2:num_steps])*(1 - rho_plus[2:num_steps]) 	
+
+	log_like = -1*((num_steps-1)/2*log(2*pi) + (1/2)*sum(log(sigma_sq_plus[2:num_steps]))) -(1/2)*sum(( (mydata[2:num_steps] - mu_long )^2/sigma_sq_plus[2:num_steps]))
+	
+		if(plot_it == TRUE){plot(mydata);lines(mu_long, lwd = 2)}
+
+	return(log_like)
+}
+
+
+
+##Data should be restricted to a single interval
+ll_2DOUdrift_single_interval = function( data_switch, time_switch, my_D, my_kg, my_nu,plot_it = FALSE){
+	
+	Delta_plus = diff(time_switch)
+	
+	num_steps = length(data_switch) 
+	
+	rho_plus = exp(-my_kg*Delta_plus)
+	sigma_sq_plus = (my_D/my_kg)*(1- exp(-2*my_kg*Delta_plus))
+	A_plus = time_switch[2:num_steps] - time_switch[1:(num_steps-1)]*rho_plus - (1/my_kg)*(1 - rho_plus)
+	
+	mu_long = data_switch[1:(num_steps-1)]*rho_plus + my_nu*A_plus + (data_switch[1]- my_nu* time_switch[1])*(1 - rho_plus) 	
+
+	log_like = -1*((num_steps-1)/2*log(2*pi) + (1/2)*sum(log(sigma_sq_plus))) -(1/2)*(sum((1/sigma_sq_plus)*((data_switch[2:num_steps] - mu_long )^2)))
+	
+	if(plot_it == TRUE){plot(data_switch); lines(mu_long, lwd = 2)}
+	
+	return(log_like)
+	
+}
+
+
+
+
+
+
+#State interval should go from t_k-1:tau_(k+1)-1
+##OR State interval should go from t_{k-1}:tau_(k+1)
+#or is it from tau_{k-1} +1:tau_k7
+ll_2DOUdrift_multiple_interval = function( mydata, time_seq, my_D, my_kgs, my_nus,my_tau, plot_it = FALSE){
+	
+
+	Delta_plus = c(0,diff(time_seq))
+	
+	num_steps = length(mydata) 
+	
+	state_0 = 1:(my_tau-1); state_1 = (my_tau):num_steps
+ 	#state_0 = 1:(my_tau); state_1 = (my_tau+1):num_steps
+
+ 	
+ 	X_switch_vec = c(); X_switch_vec[state_0] = mydata[1]; X_switch_vec[state_1] = mydata[my_tau]  
+	time_switch_vec = c(); time_switch_vec[state_0] = time_seq[1]; time_switch_vec[state_1] = time_seq[my_tau]
+
+	nu_vec = c(); nu_vec[state_0] = my_nus[1]; nu_vec[state_1] = my_nus[2]
+	kg_vec = c(); kg_vec[state_0] = my_kgs[1]; kg_vec[state_1] = my_kgs[2]
+	
+	
+	rho_plus = exp(-kg_vec*Delta_plus)
+	sigma_sq_plus = (my_D/kg_vec)*(1- exp(-2* kg_vec*Delta_plus))
+	A_plus = time_seq[2:num_steps] - time_seq[1:(num_steps-1)]*rho_plus[2:num_steps] - (1/kg_vec[2:num_steps])*(1 - rho_plus[2:num_steps])
+
+ 	 mu_long = mydata[1:(num_steps-1)]*rho_plus[2:num_steps] + nu_vec[2:num_steps]*A_plus + (X_switch_vec[2:num_steps] - nu_vec[2:num_steps]*time_switch_vec[2:num_steps])*(1 - rho_plus[2:num_steps]) 	
+
+	log_like = -1*((num_steps-1)/2*log(2*pi) + (1/2)*sum(log(sigma_sq_plus[2:num_steps]))) -(1/2)*(sum((1/sigma_sq_plus[2:num_steps])*((mydata[2:num_steps] - mu_long )^2)))
+	
+	if(plot_it == TRUE){plot(mydata);lines(mu_long, lwd = 2) }
+	return(log_like)
+	
+}
+
+
+
+ll_2DOUdrift_no_switch = function( mydata, time_seq, my_D, my_kg, my_nu,plot_it = FALSE){
+	
+	Delta_plus = c(0,diff(time_seq))
+	num_steps = length(mydata) 
+
+	rho_plus = exp(-my_kg*Delta_plus)
+	sigma_sq_plus = (my_D/my_kg)*(1- exp(-2* my_kg*Delta_plus))
+	
+	A_plus = time_seq[2:num_steps] - time_seq[1:(num_steps-1)]*rho_plus[2:num_steps] - (1/my_kg)*(1 - rho_plus[2:num_steps])
+	
+	mu_long = mydata[1:(num_steps-1)]*rho_plus[2:num_steps] + my_nu*A_plus
+
+	log_like = -1*((num_steps-1)/2*log(2*pi) + (1/2)*sum(log(sigma_sq_plus[2:num_steps]))) -(1/2)*sum(( (mydata[2:num_steps] - mu_long )^2/sigma_sq_plus[2:num_steps]))
+	
+	if(plot_it == TRUE){plot(mydata);lines(mu_long, lwd = 2)}
+
+	return(log_like)
+}
+
+
+
+
+ll_BM = function( mydata, time_seq, my_D){
+	
+	BM_var = 2*my_D*diff(time_seq)
+	
+	num_steps = length(mydata) 
+
+	log_like = -1*(((num_steps-1)/2)*log(2*pi) + (1/2)*sum(log(BM_var)))-(1/2)*sum((mydata[2:num_steps] - mydata[1:(num_steps-1)] )^2/BM_var)
+	
+	return(log_like)
+}
