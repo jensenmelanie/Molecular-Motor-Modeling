@@ -1,0 +1,396 @@
+
+
+lognorm_var = 0.1; large_kg = 100
+
+
+iterations = 20000
+burn_index_max = ceiling(0.1*iterations)
+burn_index = 1:burn_index_max
+every_kth = seq(burn_index_max,iterations, by = 50)
+
+
+mean_chain_kth = list()
+posterior_samples = list()
+
+
+
+##Inputs
+#tau_est = c(100, 200, 250)
+#long_dir; time_seq
+#my_unit_vector = my_unit
+#angle_est = proj_data$Angle_est
+
+
+
+##Just do the t,x,y,position and estimates for tau,
+##Then have the projection function in the algoirthm
+
+##=============================================
+##Handling the inputs
+##=============================================
+num_switch = length(tau_est)
+num_states = length(tau_est) + 1
+
+tau_est_vec = c(0, tau_est, length(long_dir))
+state_vec_est = rep(1:num_states,diff(tau_est_vec))
+path_length = length(long_dir)
+num_steps = path_length -1
+
+
+##======================================================
+## Setting the Hyper parameters and Candidate variances
+##======================================================
+
+D_mle = (sum(diff(long_dir)^2))/(2*dt*length(diff(long_dir)))
+
+hyper_D_alpha = D_mle*1; hyper_D_beta = 1
+
+hyper_nu = matrix(nrow = num_states, ncol = 2)
+hyper_rho = matrix(nrow = num_states, ncol = 2)
+
+initial_rho_est= c()
+for(j in 1:num_states){
+	state_index = which(state_vec_est == j)
+	lm_data = summary(lm(long_dir[state_index]~ time_seq[state_index]))$coefficients[2,1:2]
+	hyper_nu[j,] = lm_data
+
+	correction_factor = ((trans_dir[state_index[1]] - mean(trans_dir))^2*(trans_dir[state_index[length(state_index)]] - mean(trans_dir))^2)/ (2*sum((trans_dir[state_index] - mean(trans_dir) )^2))
+
+	initial_rho_est = c(initial_rho_est, acf(trans_dir[state_index], plot= FALSE)$acf[2] + correction_factor)
+
+}
+
+hyper_rho[,1] = initial_rho_est
+hyper_rho[,2] = rep(lognorm_var, num_states)
+
+D_cand_var = (D_mle/2)^2
+nu_cand_var = (hyper_nu[,1]/2)^2
+rho_cand_var = rep(lognorm_var, times = num_states)
+tau_cand_var = ceiling(((length(long_dir)/num_switch)*0.1)/(1))
+
+##======================================================
+## Initializing 
+##======================================================
+D_i = D_mle 
+nu_vec_i = hyper_nu[,1]
+tau_vec_i = tau_est_vec
+
+rho_vec_i = initial_rho_est
+ind_large_kg = which(initial_rho_est<0)
+
+if(length(ind_large_kg) >0){
+		print(paste("Initial Estimate of rho is negative for the " ,j,"th state. Arbitrary setting rho_j = exp(- dt*", large_kg, ")."))
+	rho_vec_i[ind_large_kg] = exp(-dt*large_kg)
+	}
+kg_vec_i = -log(rho_vec_i)/dt
+
+
+initial_par = round(c(kg_vec_i, D_i, tau_vec_i,  nu_vec_i),4)
+
+print(paste("Initial D:", round(D_i,4)))
+print(paste("Initial rho:", round(rho_vec_i, 4)))
+print(paste("Initial kg:", round(kg_vec_i, 4)))
+print(paste("Initial nu:", round(nu_vec_i, 4)))
+print(paste("Initial tau:", round(tau_vec_i[-c(1,length(tau_vec_i))], 4)))
+
+
+##======================================================
+## Outputs
+##======================================================
+post_sample = list()
+post_sample$D = vector()
+post_sample$nu = matrix(nrow = num_states, ncol = iterations)
+post_sample$rho = matrix(nrow = num_states, ncol = iterations)
+post_sample$kg = matrix(nrow = num_states, ncol = iterations)
+post_sample$tau = matrix(nrow = num_switch, ncol = iterations)
+
+
+accept_rate = list()
+accept_rate$D = vector()
+accept_rate$nu = matrix(nrow = num_states, ncol = iterations)
+accept_rate$rho = matrix(nrow = num_states, ncol = iterations)
+accept_rate$tau = matrix(nrow = num_switch, ncol = iterations)
+
+
+mean_chain = list()
+mean_chain$D = vector()
+mean_chain$nu = matrix(nrow = num_states, ncol = iterations)
+mean_chain$rho = matrix(nrow = num_states, ncol = iterations)
+mean_chain$kg = matrix(nrow = num_states, ncol = iterations)
+mean_chain$tau = matrix(nrow = num_switch, ncol = iterations)
+
+
+overlapping_intervals = matrix(0,nrow = num_switch, ncol = iterations)
+##======================================================
+## Start of the loop
+##======================================================
+
+for(i in 1:iterations){
+
+	lower_bound = ceiling(0.1*i)
+
+##------------------------------------------------------
+##MH Sampling for D
+##------------------------------------------------------
+
+	D_cand = cand_normRW(D_i, D_cand_var)
+
+		
+	if(sign(D_cand)>0){
+		log_like_ratio  = ll_2DOUdrift_multiple_full(long_dir, my_unit_vector, time_seq, D_cand, kg_vec_i, nu_vec_i, tau_vec_i, angle_est) -ll_2DOUdrift_multiple_full(long_dir, my_unit_vector, time_seq, D_i, kg_vec_i, nu_vec_i, tau_vec_i, angle_est)
+				
+		log_prior_ratio = log_prior_D(D_cand,shape_D = hyper_D_alpha, rate_D =hyper_D_beta)- log_prior_D(D_i,shape_D = hyper_D_alpha, rate_D = hyper_D_beta)
+		
+		ratio = exp(log_like_ratio+ log_prior_ratio)
+		
+	}else if (sign(D_cand)<0){
+		ratio = 0
+	}
+	
+	accept_fnc = min(1,ratio)
+		
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc){
+		D_i = D_cand
+		post_sample$D[i] = D_i; accept_rate$D[i] = 1
+	}else {
+		D_i = D_i
+		post_sample$D[i] = D_i; accept_rate$D[i] = 0
+	}
+	
+	
+	mean_chain$D[i] = mean(post_sample$D[lower_bound:i])
+
+#D_i = true_D
+
+##------------------------------------------------------
+##MH Sampling for kappa
+##------------------------------------------------------
+for(j in 1:num_states){
+	
+	rho_cand_j = cand_lognorm(rho_vec_i[j], rho_cand_var[j])
+	
+		
+	if(rho_cand_j<1){
+		
+		state_interval = max(tau_vec_i[j],1): tau_vec_i[j+1]
+		long_state = long_dir[state_interval]
+		time_state = time_seq[state_interval]
+		
+		kg_cand_j = -1*log(rho_cand_j)/dt
+		
+
+		log_like_ratio = ll_2DOUdrift_single_interval(long_state, my_unit_vector, time_state, D_i, kg_cand_j, nu_vec_i[j], angle_est)	-ll_2DOUdrift_single_interval(long_state, my_unit_vector, time_state, D_i, kg_vec_i[j], nu_vec_i[j], angle_est)	
+		
+	
+		log_prior_ratio= log_prior_rho_lognorm(rho_cand_j,hyper_rho[j,1], hyper_rho[j,2])-log_prior_rho_lognorm(rho_vec_i[j],hyper_rho[j,1], hyper_rho[j,2])
+
+		log_trans_ratio = log_trans_rho(rho_cand_j, rho_vec_i[j], rho_cand_var[j]) - log_trans_rho(rho_vec_i[j], rho_cand_j, rho_cand_var[j])
+		
+		ratio = exp(log_like_ratio + log_prior_ratio + log_trans_ratio)
+		
+		
+	}else{
+		ratio = 0
+	}
+	
+	accept_fnc_rho = min(1,ratio)
+	
+
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_rho){
+		rho_vec_i[j] = rho_cand_j
+		post_sample$rho[j,i] = rho_cand_j; accept_rate$rho[j,i] = 1
+		kg_vec_i[j] = kg_cand_j;post_sample$kg[j,i] = kg_cand_j;
+
+
+	}else {
+		rho_vec_i[j] = rho_vec_i[j]
+		post_sample$rho[j,i] = rho_vec_i[j]; accept_rate$rho[j,i] = 0		
+		
+		kg_vec_i[j] = kg_vec_i[j];post_sample$kg[j,i] = kg_vec_i[j]
+	}
+
+	mean_chain$rho[j,i] = mean(post_sample$rho[j,lower_bound:i])	
+	mean_chain$kg[j,i] = mean(post_sample$kg[j,lower_bound:i])
+} #end of the state loop for kg
+	
+	
+#kg_vec_i = true_kg_vec	
+	
+##-----------------------------------------------------
+## Velocity
+##-----------------------------------------------------
+
+for(j in 1:num_states){
+	
+	nu_cand_j = cand_normRW(nu_vec_i[j], nu_cand_var[j])
+
+	state_interval = max(tau_vec_i[j],1): tau_vec_i[j+1]
+	long_state = long_dir[state_interval]
+	time_state = time_seq[state_interval]
+
+	log_like_ratio = ll_2DOUdrift_single_interval(long_state, my_unit_vector, time_state, D_i, kg_vec_i[j], nu_cand_j, angle_est)	-ll_2DOUdrift_single_interval(long_state, my_unit_vector, time_state, D_i, kg_vec_i[j], nu_vec_i[j], angle_est)	
+
+		
+		log_prior_ratio = log_prior_nu(nu_cand_j, nu_mean = hyper_nu[j,1], nu_sd = hyper_nu[j,2])-log_prior_nu(nu_vec_i[j], nu_mean = hyper_nu[j,1], nu_sd =hyper_nu[j,2])
+			
+	accept_fnc_nu = min(1, exp(log_prior_ratio + log_like_ratio))
+	
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_nu){
+		nu_vec_i[j] = nu_cand_j
+		post_sample$nu[j,i] = nu_vec_i[j]; accept_rate$nu[j,i] = 1
+	}else {
+		nu_vec_i[j] = nu_vec_i[j]
+		post_sample$nu[j,i] = nu_vec_i[j]; accept_rate$nu[j,i] = 0
+	}
+
+
+	mean_chain$nu[j,i] = mean(post_sample$nu[j,lower_bound:i])
+
+	
+} #End of the velocity
+
+
+#nu_vec_i = true_nu_vec
+
+
+
+##-----------------------------------------------------
+## Tau : Switch point
+##-----------------------------------------------------
+
+for( j in 1:num_switch){
+	
+	cand_tau_j = cand_discreteRW(tau_vec_i[j+1],tau_cand_var )
+	upperbound = tau_vec_i[j+2] - 1; lowerbound = tau_vec_i[j] + 1
+	
+	#if(cand_tau_j <= tau_vec_i[j] || cand_tau_j >=  tau_vec_i[j+2]||cand_tau_j ==1 || cand_tau_j == length(long_dir)){
+	if(cand_tau_j <= lowerbound || cand_tau_j >= upperbound||cand_tau_j ==1 || cand_tau_j == length(long_dir)){
+		ratio = 0; overlapping_intervals[j,i] = 1
+	}else{
+		switch_interval = max(tau_vec_i[j],1):tau_vec_i[j+2]
+		long_switch = long_dir[switch_interval]
+		time_switch = time_seq[switch_interval]
+		my_kgs = kg_vec_i[c(j, j+1)]; my_nus = nu_vec_i[c(j, j+1)]
+		
+		rel_cand_tau = which(switch_interval == cand_tau_j)
+		rel_tau_j = which(switch_interval ==tau_vec_i[j+1])
+
+		log_like_ratio = ll_2DOUdrift_multiple_interval(long_switch, my_unit_vector,time_switch,  D_i, my_kgs, my_nus, rel_cand_tau, angle_est) -ll_2DOUdrift_multiple_interval(long_switch, my_unit_vector,time_switch,  D_i, my_kgs, my_nus, rel_tau_j, angle_est)
+				
+		
+		ratio = exp(log_like_ratio)	
+	}
+	
+	accept_fnc_tau = min(1, ratio)
+	
+	
+	if(	runif(1,min = 0, max = 1) <= accept_fnc_tau){
+		tau_vec_i[j+1] = cand_tau_j
+		post_sample$tau[j,i] = tau_vec_i[j+1]; accept_rate$tau[j,i] = 1
+	}else {
+		tau_vec_i[j+1] = tau_vec_i[j+1]
+		post_sample$tau[j,i] = tau_vec_i[j+1]; accept_rate$tau[j,i] = 0
+	}
+
+
+	mean_chain$tau[j,i] = mean(post_sample$tau[j,lower_bound:i])
+	
+	
+	
+} # End of the loop for tau
+
+
+
+	
+} #end of MH loop
+
+
+###===========================================
+### Computed Statistics
+###===========================================
+
+post_sample_vary_rho = post_sample
+
+bayes_est_vary_rho = bayes_est_list(post_sample, every_kth)
+
+accept_rates_vary_rho = bayes_est_list(accept_rate, 1:iterations)
+
+
+less_switchpoints = apply(overlapping_intervals,1,sum)/iterations
+print(less_switchpoints)
+
+
+
+
+###===========================================
+##PLottting
+###===========================================
+
+
+par(mfrow = c(1,1))
+plot(post_sample$D[every_kth], type = "l", main = D_label, ylab = "Posterior Sample", xlab = "Iteration" )
+
+
+par(mfrow = c(2,2))
+for(j in 1:num_states){
+	plot(post_sample$kg[j, every_kth], type = "l", main  = substitute(kappa/gamma [state], list(state = j)), ylim = range(post_sample$kg),ylab = "Posterior Sample",xlab = "Iteration")
+}
+
+
+
+par(mfrow = c(2,2))
+for(j in 1:num_states){
+	plot(post_sample$nu[j, every_kth], type = "l", main  = substitute(nu[state], list(state = j)), ylim = range(post_sample$nu),ylab = "Posterior Sample",xlab = "Iteration")
+}
+
+
+par(mfrow = c(1,num_switch))
+for(j in 1:num_switch){
+	plot(post_sample$tau[j, every_kth], type = "l", main  = substitute(tau[state], list(state = j)), ylim = range(1:length(long_dir)), ylab = "Posterior Sample", xlab = "Iteration")
+}
+
+
+layout(matrix(c(1,2,5,3,4,5), 2,3, byrow = TRUE))
+
+plot(mean_chain$D, type = "l", ylab = "Mean Chain", xlab = "Iteration", main = D_label)
+
+
+plot(mean_chain$kg[1,], type = "n", ylim = range(mean_chain$kg), ylab = "Mean Chain", main = kg_label,xlab = "Iteration" )
+for(j in 1:num_states){
+	lines(mean_chain$kg[j,], type = "l",col = my_colors[j])
+}
+
+
+plot(mean_chain$nu[1,], type = "n", ylim = range(mean_chain$nu), ylab = "Mean Chain", main = nu_label,xlab = "Iteration" )
+for(j in 1:num_states){
+	lines(mean_chain$nu[j,], type = "l",col = my_colors[j])
+}
+
+plot(mean_chain$tau[1,], type = "l", ylab = "Mean Chain", ylim = range(1:length(long_dir)), main = tau_label, xlab = "Iteration")
+for(j in 1:num_switch){
+	lines(mean_chain$tau[j,], type = "l",col = my_colors[j])
+}
+
+
+
+
+
+
+post_tau_est = bayes_est_vary_rho$tau
+
+tau_plot = c(0, post_tau_est, length(long_dir))
+plot(time_seq, long_dir, type = "n", xlab = time_label, ylab = long_label)
+for(kk in 1:num_states){
+	state_index = (tau_plot[kk]):(tau_plot[kk+1])
+	lines(time_seq[state_index], long_dir[state_index], col = my_colors[kk])
+}
+points(time_seq[post_tau_est], long_dir[post_tau_est], pch = 16, col = my_colors)
+title("Kin1-DDB trajectory")
+
+
+
+
+
