@@ -100,7 +100,7 @@ title(sub = paste("Path Length",path_length ))
 ## Fills in missing data
 ###===================================================
 
-Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10 ){
+Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10, noise_constant = 10 ){
 	Delta_n = diff(time)
 
 	Delta = round(Delta_n, digits= round_to) 
@@ -130,7 +130,7 @@ Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10 ){
 	
 	
 	
-		Xn_fill[(lower+1):(upper-1)] = Xn_fill[lower]+ (Xn_fill[upper] - Xn_fill[lower])*(c(1:num_to_replace)/(num_to_replace+1))+ rnorm(num_to_replace, mean = 0,sd = sqrt(abs(Xn_fill[lower])/10))
+		Xn_fill[(lower+1):(upper-1)] = Xn_fill[lower]+ (Xn_fill[upper] - Xn_fill[lower])*(c(1:num_to_replace)/(num_to_replace+1))+ rnorm(num_to_replace, mean = 0,sd = sqrt(abs(Xn_fill[lower])/noise_constant))
 		
 		missing_index = which(Xn_fill ==0)
 		missing_index
