@@ -100,8 +100,8 @@ title(sub = paste("Path Length",path_length ))
 ## Fills in missing data
 ###===================================================
 
-Xn_fill_fnc = function(time, Xn, round_to = 5, cut_off = 10, noise_constant = 10 ){
-	Delta_n = diff(time)
+Xn_fill_fnc = function(t1, Xn, round_to = 5, cut_off = 10, noise_constant = 10 ){
+	Delta_n = diff(t1)
 
 	Delta = round(Delta_n, digits= round_to) 
 	
