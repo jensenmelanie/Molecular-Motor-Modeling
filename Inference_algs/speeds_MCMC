@@ -55,7 +55,37 @@ ll_BMswitch = function(Xn, taus, thetas, sigma_sq){
 
 
 
+##---------------------------------
+##Posterior Sample Violin plots
+##--------------------------------
+plot_post_violin = function(post_samp, parname, par_range= NA, every_kth = 1, warmup = 0.5){
 
+num_samples = nrow(post_samp)
+num_par = ncol(post_samp)
+
+every_kth_index = seq(ceiling(warmup*num_samples)+every_kth, num_samples, by= every_kth)
+num_samp_k = length(every_kth_index)
+
+
+my_colors = mellow.color.pal(num_par +2)
+	if(sum(as.numeric(my_colors == "#FFFFBF")) >0 ){
+		my_colors = my_colors[- which(my_colors == "#FFFFBF")]
+	}else{
+		my_colors = my_colors[1:(num_par +1)]
+	}
+
+par_lab = 1:num_par
+par_mat = cbind(rep(par_lab,  each =num_samp_k ),c(post_samp[every_kth_index,]))
+par_data = data.frame(group = par_mat[,1], value = par_mat[,2])
+
+if(is.na(par_range[1]) == TRUE){
+	par_range = range(par_data['value'])
+}
+
+ ggplot(par_data, aes(x = as.factor(group), y = value, fill = as.factor(group))) + geom_violin()  + scale_fill_manual(values = my_colors, name = "Parameter", labels = parname)  + labs(y = "Parameter Value", x = "State Index") + labs(title = "Posterior Sample Violin Plot") + ylim(par_range[1], par_range[2])
+
+
+} #End of function
 
  
 ##================================================
