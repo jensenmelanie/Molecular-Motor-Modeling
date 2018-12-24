@@ -1,0 +1,506 @@
+
+
+##=============================================
+##-------------Switch point Alg NO minimum duration
+##=============================================
+
+
+##--------------------------------------------- 
+##--------------- Helper functions
+##---------------------------------------------
+
+
+state_list_fnc = function(y, r_vec){
+	N = length(y); tau_r = which(r_vec == 1)
+	loop_tau = c(0, tau_r, N)
+	state_index = list(); y_state = list()
+	for(st in 1:(length(tau_r)+1)){
+		state_index[[st]] = (loop_tau[st]+1):loop_tau[st+1]
+		y_state[[st]] = y[state_index[[st]]]
+	}
+
+	return(list(index = state_index, y_st = y_state))
+}
+
+
+Sr_fnc = function(y, r_vec){
+	N = length(y); tau_r = which(r_vec == 1)
+	state_list = state_list_fnc(y, r_vec)
+	return(
+	
+	sum(sapply(state_list$y_st,function(y_st){sum((y_st - mean(y_st))^2)}))
+	
+	)
+		
+}
+
+
+## Conditional posterior of r: p(r| data, lambda)
+l_condpost_r = function(y, r_vec, q_prob){
+	N = length(y)
+	Kr = sum(r_vec)+1; 
+	tau_r = which(r_vec == 1); n_k = diff(c(0, tau_r, N)) 
+	return((Kr-1)*(log(q_prob) -log(1-q_prob)) -(1/2)*sum(log(n_k))+(Kr/2)*log(pi)-1*((N-Kr)/2)*log(Sr_fnc(y, r_vec))+lgamma((N-Kr)/2))
+}
+
+
+## Conditional prior of r: p(r|lambda)
+l_condprior_r = function(q_prob, r_vec){
+	N = length(r_vec)
+	num_switch = sum(r_vec)
+	return(num_switch*log(q_prob)- (N-2-num_switch)*log(1 - q_prob))
+}
+#(N-2): because we do not allow the first or last position to be switch points
+# But r always has N components, the first and last are fixed at 0
+
+
+##prior of lambda: p(lambda| alpha, beta)
+lprior_lambda = function(lambda, alpha, beta){
+	return(dgamma(lambda, shape = alpha, rate = beta, log = TRUE))
+}
+
+##proposal of lambda: q(lambda^cand|q)
+lprop_lambda = function(lambda, alpha, beta){
+	return(dgamma(lambda, shape = alpha, rate = beta, log = TRUE))
+}
+
+##proposal of lambda: q(lambda^cand|q)
+lprop_uniform_lambda = function(lambda, min, max){
+	return(dunif(lambda, min = min, max = max, log = TRUE))
+}
+
+##--------------------------------------------- 
+##---------------GAMMA prior and proposal
+##---------------------------------------------
+
+MCMC_switchprocess_alg = function(mydata,Delta, alg_parameters, thin_num = 50, plot_it = FALSE){
+
+	sim_data = diff(mydata$cargo)
+
+	N = length(sim_data)
+
+	iterations = alg_parameters$iterations
+	
+	##Hyper prior on lambda
+	hyper_alpha = alg_parameters$hyper_alpha
+	hyper_beta = alg_parameters$hyper_beta
+	min_dur = alg_parameters$min_dur
+	
+	## Proposal for lambda
+	prop_alpha = alg_parameters$prop_alpha
+	prop_beta = alg_parameters$prop_beta
+	prop_probs = alg_parameters$prop_probs
+
+	##Proposal for new r vec (First type of proposal)
+	lambda_rprop = hyper_alpha/hyper_beta
+	q_rprop= 1 - exp(-Delta*lambda_rprop)
+	
+
+	lambda_0 = rgamma(1, hyper_alpha, hyper_beta)
+	q_prob_0 = 1 - exp(-Delta*lambda_0)
+
+	r_vec = c(0,rbinom(n = N-2, size = 1, prob = q_prob_0),0)
+	lambda_curr = lambda_0; q_curr = q_prob_0
+	
+
+	accept_ind = matrix(nrow = iterations, ncol = 3)
+	lambda_n = vector(length = iterations)
+	accept_lambda = c()
+
+	k_n = c()
+	
+	save_it = 1
+
+##=============================================
+##------------- Start of the iteration
+##=============================================
+
+	
+	for( it in 1: iterations){
+	
+		# if(it > (iterations- save_num +1)){
+			# save_it = save_it +1
+		# }
+	
+	##--------------------------------------------- 
+	##--------------- hierarchical for lambda
+	##---------------------------------------------
+	lambda_prop = rgamma(1, prop_alpha, prop_beta)
+	# Just an independent samplers
+	
+	
+	q_prop = 1 - exp(-Delta*lambda_prop)
+	q_curr = 1 - exp(-Delta*lambda_curr)
+	
+	
+	Kr_curr = sum(r_vec) + 1
+	
+	lpost_ratio = l_condprior_r(q_prop, r_vec) - l_condprior_r(q_curr, r_vec)
+	lprior_ratio = lprior_lambda(lambda_prop, hyper_alpha, hyper_beta) - lprior_lambda(lambda_curr, hyper_alpha, hyper_beta)
+	lprop_ratio = lprop_lambda(lambda_curr, prop_alpha, prop_beta) - lprop_lambda(lambda_prop, prop_alpha, prop_beta)
+	#log(1)
+	
+	
+	alpha_lambda = min(1, exp(lpost_ratio + lprior_ratio + lprop_ratio))
+	
+	
+		if(alpha_lambda >=1){
+			q_curr = q_prop; lambda_curr = lambda_prop; accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+		}else{
+			unif_rv = runif(1, 0, 1)
+			if(unif_rv <= alpha_lambda){
+				q_curr = q_prop; lambda_curr = lambda_prop; 
+				accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+			}else{
+				q_curr = q_curr; lambda_curr = lambda_curr; 
+				accept_lambda = c(accept_lambda, 0); lambda_n[it] = lambda_curr
+				
+			}
+			
+			
+			}
+	
+	
+	
+	##--------------------------------------------- 
+	##--------------- Proposal for r vector
+	##--------------------------------------------- 
+	
+	if(sum(r_vec) == 0){
+		prop_probs = prop_probs[1:2]/sum(prop_probs[1:2])
+	}else{
+		prop_probs = alg_parameters$prop_probs
+		}
+	
+	
+	r_rv = runif(n = 1, 0, 1)
+	
+	if(r_rv <= prop_probs[1]){
+	
+	##--------------- A whole new r vector
+		
+		r_prop = c(0, rbinom(n = N-2, size = 1, prob = q_rprop), 0)
+		
+		post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+		transition_ratio = l_condprior_r(q_rprop,r_vec) - l_condprior_r(q_rprop,r_prop)
+		
+		alpha_1 = min(1,exp(post_ratio + transition_ratio))
+		
+		
+		if( alpha_1>= 1){
+			 r_vec = r_prop; accept_ind[it,1] = 1; #r_mat[save_it,] = r_prop;
+		}else if(runif(1, min = 0, max = 1) <= alpha_1){
+			r_vec = r_prop; accept_ind[it,1] = 1; #r_mat[save_it,] = r_prop;
+		}else{
+			r_vec = r_vec; accept_ind[it,1] = 0; #r_mat[save_it,] = r_vec; 
+		}
+	
+	}else if(r_rv <= cumsum(prop_probs)[2] ){
+	##--------------- Add or subtract a single switch point
+		s_index = sample( 2:(N-1),1)
+		
+		r_prop = r_vec; r_prop[s_index] = 1-r_vec[s_index]
+		
+		post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+		#transition_ratio = log(1)
+		
+		alpha_2 = min(1, exp(post_ratio))
+		
+		if(alpha_2 >=1){
+			 r_vec = r_prop; accept_ind[it,2] = 1; #r_mat[save_it,] = r_prop;
+		}else if(runif(1,0,1) <= alpha_2){
+			 r_vec = r_prop; accept_ind[it,2] = 1; #r_mat[save_it,] = r_prop;
+		}else{
+			r_vec = r_vec; accept_ind[it,2] = 0; #r_mat[save_it,] = r_vec; 
+		}
+		
+	} else{	
+		##--------------- Move the position of a single swithc point
+		if(sum(r_vec >0)){
+	
+			s_index = sample( which(r_vec ==1),1)
+		
+			to_remove = unique(c(1,N,which(r_vec ==1), which(r_vec ==1)-1))
+		
+			s_prime_index = sample((1:N)[-to_remove],1)
+		
+			r_prop = r_vec; r_prop[s_index] = 0; r_prop[s_prime_index] = 1
+		
+			post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+			alpha_3 = min(1, exp(post_ratio))
+		
+		
+		
+			if(alpha_3 >=1){
+				r_vec = r_prop; accept_ind[it,3] = 1;
+				
+			}else if(runif(1,0,1) <= alpha_3){
+				r_vec = r_prop; accept_ind[it,3] = 1; 
+			}else{
+				r_vec = r_vec; accept_ind[it,3] = 0;
+			} # end of the test cases
+		}else{
+			r_vec = r_vec; accept_ind[it,3] = 0;  
+	
+		} # end of option 3
+		
+	} # end of the proposal for r
+	
+	
+	if(it > 0.5* iterations){
+		k_n = c(k_n, sum(r_vec))
+	}
+	
+	
+	
+	}# end of iteration loop
+	
+	thin_index = seq(1,length(k_n), by = thin_num)
+	k_thin = k_n[thin_index]
+	probk_est = summary(as.factor(sort((k_thin))))/length(k_thin)
+	k_map = sort(unique(k_thin))[which.max(probk_est)]
+	
+
+	
+	accept_rates_r = apply(accept_ind,2, sum, na.rm = TRUE)/apply(accept_ind,2, function(vector){sum((is.na(vector) ==FALSE))})
+
+	print("Acceptance rate of r")
+	print(accept_rates_r)
+	
+	print("Acceptance rate of lambda")
+	print(sum(accept_lambda)/iterations)
+	
+	if(plot_it == TRUE){	
+			
+		plot(sort(unique(k_thin)), probk_est, type = 'h', ylim = c(0,1), xlab = 'Number of switches', xlim = c(0, max(k_thin)), ylab = "Probability")
+		points(sort(unique(k_thin)), probk_est, pch = 16)
+		title("Posterior of K")
+		
+	
+		plot(density(lambda_n[floor(iterations*0.5):iterations]), type = 'l', main = expression(paste("Posterior Emperical Density of ", lambda)))
+		
+	}
+	
+	return(list(kpost = probk_est, kmap = k_map, traj= cbind(mydata$time,mydata$cargo), true_tau = mydata$true_tau[-length( mydata$true_tau)]))
+
+} #End of function
+
+
+
+
+
+##--------------------------------------------- 
+##---------------GAMMA prior and UNIFORM proposal
+##---------------------------------------------
+
+MCMC_switchprocess_alg_uniform = function(mydata,Delta, alg_parameters, thin_num = 50, plot_it = FALSE){
+
+	sim_data = diff(mydata$cargo)
+
+	N = length(sim_data)
+
+	iterations = alg_parameters$iterations
+	##Hyper prior on lambda
+	hyper_alpha = alg_parameters$hyper_alpha
+	hyper_beta = alg_parameters$hyper_beta
+	min_dur = alg_parameters$min_dur
+	
+	## Proposal for lambda
+	prop_min = alg_parameters$prop_min
+	prop_max = alg_parameters$prop_max
+	prop_probs = alg_parameters$prop_probs
+
+	##Proposal for new r vec (First type of proposal)
+	lambda_rprop = hyper_alpha/hyper_beta
+	q_rprop= 1 - exp(-Delta*lambda_rprop)
+	
+
+	lambda_0 = rgamma(1, hyper_alpha, hyper_beta)
+	q_prob_0 = 1 - exp(-Delta*lambda_0)
+
+	r_vec = c(0,rbinom(n = N-2, size = 1, prob = q_prob_0),0)
+	lambda_curr = lambda_0; q_curr = q_prob_0
+	
+
+	#save_num = alg_parameters$save_num
+	#r_mat = matrix(nrow = save_num, ncol = N)
+	accept_ind = matrix(nrow = iterations, ncol = 3)
+	lambda_n = vector(length = iterations)
+	accept_lambda = c()
+
+	k_n = c()
+	
+	save_it = 1
+
+##=============================================
+##------------- Start of the iteration
+##=============================================
+
+	
+	for( it in 1: iterations){
+	
+		# if(it > (iterations- save_num +1)){
+			# save_it = save_it +1
+		# }
+	
+	##--------------------------------------------- 
+	##--------------- hierarchical for lambda
+	##---------------------------------------------
+	lambda_prop = runif(1, prop_min, prop_max)
+	# Just an independent samplers
+	
+	
+	q_prop = 1 - exp(-Delta*lambda_prop)
+	q_curr = 1 - exp(-Delta*lambda_curr)
+	
+	
+	Kr_curr = sum(r_vec) + 1
+	
+	lpost_ratio = l_condprior_r(q_prop, r_vec) - l_condprior_r(q_curr, r_vec)
+	lprior_ratio = lprior_lambda(lambda_prop, hyper_alpha, hyper_beta) - lprior_lambda(lambda_curr, hyper_alpha, hyper_beta)
+	lprop_ratio = log(1)
+	# Since
+	
+	alpha_lambda = min(1, exp(lpost_ratio + lprior_ratio + lprop_ratio))
+	
+	
+		if(alpha_lambda >=1){
+			q_curr = q_prop; lambda_curr = lambda_prop; accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+		}else{
+			unif_rv = runif(1, 0, 1)
+			if(unif_rv <= alpha_lambda){
+				q_curr = q_prop; lambda_curr = lambda_prop; 
+				accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+			}else{
+				q_curr = q_curr; lambda_curr = lambda_curr; 
+				accept_lambda = c(accept_lambda, 0); lambda_n[it] = lambda_curr
+				
+			}
+			
+			
+			}
+	
+	
+	
+	##--------------------------------------------- 
+	##--------------- Proposal for r vector
+	##--------------------------------------------- 
+	
+	if(sum(r_vec) == 0){
+		prop_probs = prop_probs[1:2]/sum(prop_probs[1:2])
+	}else{
+		prop_probs = alg_parameters$prop_probs
+		}
+	
+	
+	r_rv = runif(n = 1, 0, 1)
+	
+	if(r_rv <= prop_probs[1]){
+	
+	##--------------- A whole new r vector
+		
+		r_prop = c(0, rbinom(n = N-2, size = 1, prob = q_rprop), 0)
+		
+		post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+		transition_ratio = l_condprior_r(q_rprop,r_vec) - l_condprior_r(q_rprop,r_prop)
+		
+		alpha_1 = min(1,exp(post_ratio + transition_ratio))
+		
+		
+		if( alpha_1>= 1){
+			 r_vec = r_prop; accept_ind[it,1] = 1; #r_mat[save_it,] = r_prop;
+		}else if(runif(1, min = 0, max = 1) <= alpha_1){
+			r_vec = r_prop; accept_ind[it,1] = 1; #r_mat[save_it,] = r_prop;
+		}else{
+			r_vec = r_vec; accept_ind[it,1] = 0; #r_mat[save_it,] = r_vec; 
+		}
+	
+	}else if(r_rv <= cumsum(prop_probs)[2] ){
+	##--------------- Add or subtract a single switch point
+		s_index = sample( 2:(N-1),1)
+		
+		r_prop = r_vec; r_prop[s_index] = 1-r_vec[s_index]
+		
+		post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+		#transition_ratio = log(1)
+		
+		alpha_2 = min(1, exp(post_ratio))
+		
+		if(alpha_2 >=1){
+			 r_vec = r_prop; accept_ind[it,2] = 1; #r_mat[save_it,] = r_prop;
+		}else if(runif(1,0,1) <= alpha_2){
+			 r_vec = r_prop; accept_ind[it,2] = 1; #r_mat[save_it,] = r_prop;
+		}else{
+			r_vec = r_vec; accept_ind[it,2] = 0; #r_mat[save_it,] = r_vec; 
+		}
+		
+	} else{	
+		##--------------- Move the position of a single swithc point
+		if(sum(r_vec >0)){
+	
+			s_index = sample( which(r_vec ==1),1)
+		
+			to_remove = unique(c(1,N,which(r_vec ==1), which(r_vec ==1)-1))
+		
+			s_prime_index = sample((1:N)[-to_remove],1)
+		
+			r_prop = r_vec; r_prop[s_index] = 0; r_prop[s_prime_index] = 1
+		
+			post_ratio = (l_condpost_r(sim_data,r_prop, q_curr) - l_condpost_r(sim_data, r_vec, q_curr))
+			alpha_3 = min(1, exp(post_ratio))
+		
+		
+		
+			if(alpha_3 >=1){
+				r_vec = r_prop; accept_ind[it,3] = 1; #r_mat[save_it,] = r_prop;
+			}else if(runif(1,0,1) <= alpha_3){
+					 r_vec = r_prop; accept_ind[it,3] = 1; #r_mat[save_it,] = r_prop;
+				}else{
+					r_vec = r_vec; accept_ind[it,3] = 0; #r_mat[save_it,] = r_vec; 
+				} # end of the test cases
+		}else{
+			
+			r_vec = r_vec; accept_ind[it,3] = 0; #r_mat[save_it,] = r_vec; 
+	
+		} # end of option 3
+		
+	} # end of the proposal for r
+	
+	
+	if(it > 0.5* iterations){
+		k_n = c(k_n, sum(r_vec))
+	}
+	
+	
+	
+	}# end of iteration loop
+	
+	thin_index = seq(1,length(k_n), by = thin_num)
+	k_thin = k_n[thin_index]
+	probk_est = summary(as.factor(sort((k_thin))))/length(k_thin)
+	k_map = sort(unique(k_thin))[which.max(probk_est)]
+	
+	
+	
+	accept_rates_r = apply(accept_ind,2, sum, na.rm = TRUE)/apply(accept_ind,2, function(vector){sum((is.na(vector) ==FALSE))})
+
+	print("Acceptance rate of r")
+	print(accept_rates_r)
+	
+	print("Acceptance rate of lambda")
+	print(sum(accept_lambda)/iterations)
+	
+	if(plot_it == TRUE){	
+			
+		plot(sort(unique(k_thin)), probk_est, type = 'h', ylim = c(0,1), xlab = 'Number of switches', xlim = c(0, max(k_thin)), ylab = "Probability")
+		points(sort(unique(k_thin)), probk_est, pch = 16)
+		title("Posterior of K")
+		
+	
+		plot(density(lambda_n[floor(iterations*0.5):iterations]), type = 'l', main = expression(paste("Posterior Emperical Density of ", lambda)))
+		
+	}
+	
+	return(list(kpost = probk_est, kmap = k_map, traj= cbind(mydata$time,mydata$cargo), true_tau = mydata$true_tau[-length( mydata$true_tau)]))
+
+} #End of function
