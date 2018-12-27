@@ -1,0 +1,316 @@
+
+##=============================================
+##-------------Switch point Alg minimum duration
+##=============================================
+
+
+##--------------------------------------------- 
+##--------------- Helper functions
+##---------------------------------------------
+
+
+proposal_r_fnc = function(N, min_dur, q_prob){
+	j = 1; tau_vec = c(0)
+	while(tau_vec[j]+ min_dur <= N){
+		new_tau = rgeom(1, prob = q_prob) + tau_vec[j] + min_dur
+		if(new_tau >= (N- min_dur)){break}
+		tau_vec = c(tau_vec, new_tau)
+		j = j+1
+	}
+	r_vec = rep(0, N); r_vec[tau_vec[-1]] = 1
+	return(r_vec)
+}
+
+
+state_list_fnc = function(y, r_vec){
+	N = length(y); tau_r = which(r_vec == 1)
+	loop_tau = c(0, tau_r, N)
+	state_index = list(); y_state = list()
+	for(st in 1:(length(tau_r)+1)){
+		state_index[[st]] = (loop_tau[st]+1):loop_tau[st+1]
+		y_state[[st]] = y[state_index[[st]]]
+	}
+
+	return(list(index = state_index, y_st = y_state))
+}# End of fnc
+
+
+Sr_fnc = function(y, r_vec){
+	N = length(y); tau_r = which(r_vec == 1)
+	state_list = state_list_fnc(y, r_vec)
+	return(sum(sapply(state_list$y_st,function(y_st){sum((y_st - mean(y_st))^2)})))	
+}# End of fnc
+
+
+##Log likelihood of observing the data given r
+loglike_r = function(y, r_vec){
+	Kr = sum(r_vec)+1; N = length(y)
+	tau_r = which(r_vec == 1); n_k = diff(c(0, tau_r, N)) 
+	return(-(1/2)*sum(log(n_k))+Kr*log(pi)-1*((N-Kr)/2)*log(Sr_fnc(y, r_vec))+lgamma((N-Kr)/2))
+}# End of fnc
+
+
+## Conditional prior of r: p(r|lambda, min_dur)
+lprior_r_dur = function( q_prop,r_vec, min_dur){
+	N = length(r_vec)
+	tau_r = c(0,which(r_vec==1),N)
+	A = sum(sapply( diff(tau_r)-1-2*(min_dur-1), function(x){max(x,0)}))
+	Kr = sum(r_vec)+1
+	return((Kr-1)*log(q_prop) + A*log(1- q_prop))
+}# End of fnc
+
+
+r_vec012_fnc = function(r_vec, min_dur){
+	N = length(r_vec)
+	r_filled = rep(0, N)
+	tau_vec = which(r_vec == 1)
+	if(length(tau_vec)>0){
+		for(j in 1:length(tau_vec)){
+			r_filled[max(0,(tau_vec[j] - (min_dur-1))): min((tau_vec[j]+ (min_dur-1)),N)] = 2
+		}
+	}
+	r_filled[(N-min_dur + 1):N] = 2; r_filled[1:(min_dur + 1)] = 2;
+	if(length(tau_vec)>0){
+	r_filled[tau_vec] = 1
+	}
+ 	return(r_filled)
+}# End of fnc
+
+##prior of lambda: p(lambda| alpha, beta)
+lprior_lambda = function(lambda, alpha, beta){
+	return(dgamma(lambda, shape = alpha, rate = beta, log = TRUE))
+}
+
+##proposal of lambda: q(lambda^cand|q)
+lprop_lambda = function(lambda, alpha, beta){
+	return(dgamma(lambda, shape = alpha, rate = beta, log = TRUE))
+}
+
+
+
+
+
+
+
+##=============================================
+##------------- Algorithm Function
+##=============================================
+
+MCMC_switchprocess_alg_mindur = function(mydata,Delta, alg_parameters, thin_num = 50, plot_it = FALSE){
+
+##--------------------------------------------- 
+##---------------Algorithm parameters
+##--------------------------------------------
+sim_data = diff(mydata$cargo)
+
+	N = length(sim_data)
+
+	iterations = alg_parameters$iterations
+	##Hyper prior on lambda
+	hyper_alpha = alg_parameters$hyper_alpha
+	hyper_beta = alg_parameters$hyper_beta
+	min_dur = alg_parameters$min_dur
+	
+	## Proposal for lambda
+	prop_alpha = alg_parameters$prop_alpha
+	prop_beta = alg_parameters$prop_beta
+	prop_probs = alg_parameters$prop_probs
+
+	##Proposal for new r vec (First type of proposal)
+	lambda_rprop = hyper_alpha/hyper_beta
+	q_rprop= 1 - exp(-Delta*lambda_rprop)
+	
+
+	lambda_0 = rgamma(1, hyper_alpha, hyper_beta)
+	q_prob_0 = 1 - exp(-Delta*lambda_0)
+
+	r_vec = proposal_r_fnc(N, min_dur, q_prob_0)
+
+	lambda_curr = lambda_0; q_curr = q_prob_0
+	
+	accept_ind = matrix(nrow = iterations, ncol = 3)
+	lambda_n = vector(length = iterations)
+	accept_lambda = c()
+
+	k_n = c()
+	
+	save_it = 1	
+
+	
+	for( it in 1: iterations){
+	
+	
+	##--------------------------------------------- 
+	##--------------- hierarchical for lambda
+	##---------------------------------------------
+		lambda_prop = rgamma(1, prop_alpha, prop_beta)
+		# Just an independent samplers
+	
+	
+		q_prop = 1 - exp(-Delta*lambda_prop)
+		q_curr = 1 - exp(-Delta*lambda_curr)
+	
+	
+		Kr_curr = sum(r_vec) + 1
+	
+		lpost_ratio = lprior_r_dur(q_prop, r_vec, min_dur) - lprior_r_dur(q_curr, r_vec, min_dur)
+		lprior_ratio = lprior_lambda(lambda_prop, hyper_alpha, hyper_beta) - lprior_lambda(lambda_curr, hyper_alpha, hyper_beta)
+		lprop_ratio = lprop_lambda(lambda_curr, prop_alpha, prop_beta) - lprop_lambda(lambda_prop, prop_alpha, prop_beta)
+	
+	
+		alpha_lambda = min(1, exp(lpost_ratio + lprior_ratio + lprop_ratio))
+	
+	
+		if(alpha_lambda >=1){
+			q_curr = q_prop; lambda_curr = lambda_prop; accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+		}else{
+			unif_rv = runif(1, 0, 1)
+			if(unif_rv <= alpha_lambda){
+				q_curr = q_prop; lambda_curr = lambda_prop; 
+				accept_lambda = c(accept_lambda, 1); lambda_n[it] = lambda_prop
+			}else{
+				q_curr = q_curr; lambda_curr = lambda_curr; 
+				accept_lambda = c(accept_lambda, 0); lambda_n[it] = lambda_curr
+				
+			}
+			
+			
+			} #End of MH for lambda
+	
+	
+	
+	##--------------------------------------------- 
+	##--------------- Proposal for r vector
+	##--------------------------------------------- 
+	
+	
+	r_rv = runif(n = 1, 0, 1)
+	
+	if(r_rv <= prop_probs[1]){
+	
+	
+		##--------------- A whole new r vector
+			
+			r_prop = proposal_r_fnc(N, min_dur, q_rprop)
+			
+			like_ratio  = loglike_r(sim_data,r_prop)- loglike_r(sim_data,r_vec)
+			transition_ratio = lprior_r_dur(q_rprop,r_vec, min_dur) - lprior_r_dur(q_rprop,r_prop, min_dur)
+			prior_ratio = lprior_r_dur(q_curr,r_prop, min_dur) - lprior_r_dur(q_curr, r_vec, min_dur)
+			
+			alpha_1 = min(1,exp(like_ratio + transition_ratio + prior_ratio))
+			
+			
+			if( alpha_1>= 1){
+				 r_vec = r_prop; accept_ind[it,1] = 1
+			}else if(runif(1, min = 0, max = 1) <= alpha_1){
+				 r_vec = r_prop; accept_ind[it,1] = 1
+			}else{
+				 r_vec = r_vec; accept_ind[it,1] = 0
+			}
+		
+	}else if(r_rv <= cumsum(prop_probs)[2] ){		
+		##--------------- Add or subtract a single switch point
+		
+			r_vec012 = r_vec012_fnc(r_vec, min_dur)
+			to_sample = c(which(r_vec012 == 1), which(r_vec012 == 0))
+			s_bd = sample(to_sample,1)
+			r_prop = r_vec; r_prop[s_bd]  = 1-r_vec[s_bd]
+			
+			q_rprop_r = 1/length(to_sample)
+			q_r_rprop = 1/length(c(which(r_vec012_fnc(r_prop, min_dur) == 0), which(r_vec012_fnc(r_prop, min_dur) == 1)))
+			
+			log_q_ratio = log(q_r_rprop)- log(q_rprop_r)
+			log_prior_ratio = lprior_r_dur( q_curr,r_prop, min_dur) - lprior_r_dur(q_curr, r_vec, min_dur)
+			like_ratio  = loglike_r(sim_data,r_prop)- loglike_r(sim_data,r_vec)
+			
+			alpha_2 = min(1, exp(like_ratio + log_prior_ratio - log_q_ratio))
+			
+			if(alpha_2 >=1){
+				 r_vec = r_prop; accept_ind[it,2] = 1
+			}else if(runif(1,0,1) <= alpha_2){
+				 r_vec = r_prop; accept_ind[it,2] = 1
+			}else{
+				r_vec = r_vec; accept_ind[it,2] = 0
+			}
+		
+		
+	} else{		
+		##--------------- Move the position of a single swithc point
+			if(sum(r_vec >0)){
+		
+				s_index = sample( which(r_vec ==1),1)
+				
+				r_nos = r_vec; r_nos[s_index] = 0
+				r_vec012 = r_vec012_fnc(r_nos, min_dur)
+				
+				sprime_to_sample = which(r_vec012 == 0); 
+				s_prime_index = sample(sprime_to_sample,1)
+				q_rprop_r = 1/length(sprime_to_sample) 	# q(r_prop)|r)
+		
+				r_prop = r_nos; r_prop[s_prime_index] = 1
+				
+				# q(r|r_prop)
+				r_prop_prime = r_prop; r_prop_prime[s_prime_index] = 0
+				rprop_vec012 = r_vec012_fnc(r_prop_prime, min_dur)
+				q_r_rprop = 1/length(which(rprop_vec012 == 0))
+			
+				#computing the ratio
+				log_q_ratio = log(q_r_rprop) - log(q_rprop_r)
+				log_prior_ratio = lprior_r_dur(q_curr ,r_prop, min_dur) - lprior_r_dur(q_curr ,r_vec, min_dur)
+				like_ratio  = loglike_r(sim_data,r_prop)- loglike_r(sim_data,r_vec)
+				
+				alpha_3 = min(1, exp(like_ratio + log_prior_ratio + log_q_ratio))
+			
+		
+				if(alpha_3 >=1){
+					r_vec = r_prop; accept_ind[it,3] = 1
+				}else if(runif(1,0,1) <= alpha_3){
+					 r_vec = r_prop; accept_ind[it,3] = 1
+					}else{
+					 r_vec = r_vec; accept_ind[it,3] = 0
+					} # end of the test cases
+			}else{
+				
+			r_vec = r_vec; accept_ind[it,3] = 0
+		
+			} # end of option 3
+	
+	
+	} # End of MH for r	
+		
+		if(it > 0.5* iterations){
+			k_n = c(k_n, sum(r_vec))
+		}
+		
+		
+	} # End of iterations
+	
+	thin_index = seq(1,length(k_n), by = thin_num)
+	k_thin = k_n[thin_index]
+	probk_est = summary(as.factor(sort((k_thin))))/length(k_thin)
+	k_map = sort(unique(k_thin))[which.max(probk_est)]
+
+	accept_rates_r = apply(accept_ind,2, sum, na.rm = TRUE)/apply(accept_ind,2, function(vector){sum((is.na(vector) ==FALSE))})
+	
+	print('Acceptance rate for r')
+	print(accept_rates_r)
+
+	print(paste("Acceptance rate for lambda ",sum(accept_lambda)/iterations))
+
+##-------------plotting
+
+	if(plot_it == TRUE){	
+			
+		plot(sort(unique(k_thin)), probk_est, type = 'h', ylim = c(0,1), xlab = 'Number of switches', xlim = c(0, max(k_thin)), ylab = "Probability")
+		points(sort(unique(k_thin)), probk_est, pch = 16)
+		title("Posterior of K")
+		
+	
+		plot(density(lambda_n[floor(iterations*0.5):iterations]), type = 'l', main = expression(paste("Posterior Emperical Density of ", lambda)))
+		
+	}
+	
+	return(list(kpost = probk_est, kmap = k_map, traj= cbind(mydata$time,mydata$cargo), true_tau = mydata$true_tau[-length( mydata$true_tau)]))
+
+
+}
