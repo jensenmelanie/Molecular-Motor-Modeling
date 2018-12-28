@@ -282,10 +282,11 @@ sim_data = diff(mydata$cargo)
 					r_vec = r_prop; accept_ind[it,3] = 1
 				}else if(runif(1,0,1) <= alpha_3){
 					 r_vec = r_prop; accept_ind[it,3] = 1
-					}else{
+				}else{
 					 r_vec = r_vec; accept_ind[it,3] = 0
-					} # end of the test cases
+				} # end of the test cases
 	
+		
 	
 	
 	} # End of MH for r	
