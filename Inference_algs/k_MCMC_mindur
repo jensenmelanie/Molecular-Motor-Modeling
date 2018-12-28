@@ -286,8 +286,6 @@ sim_data = diff(mydata$cargo)
 					 r_vec = r_vec; accept_ind[it,3] = 0
 					} # end of the test cases
 	
-		
-			} # end of option 3
 	
 	
 	} # End of MH for r	
