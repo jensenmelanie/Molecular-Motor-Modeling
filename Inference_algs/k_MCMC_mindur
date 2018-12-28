@@ -98,6 +98,8 @@ lprop_lambda = function(lambda, alpha, beta){
 
 MCMC_switchprocess_alg_mindur = function(mydata,Delta, alg_parameters, thin_num = 50, plot_it = FALSE){
 
+
+
 ##--------------------------------------------- 
 ##---------------Algorithm parameters
 ##--------------------------------------------
@@ -110,6 +112,7 @@ sim_data = diff(mydata$cargo)
 	hyper_alpha = alg_parameters$hyper_alpha
 	hyper_beta = alg_parameters$hyper_beta
 	min_dur = alg_parameters$min_dur
+	max_switch = N/(min_dur + 1)
 	
 	## Proposal for lambda
 	prop_alpha = alg_parameters$prop_alpha
@@ -184,7 +187,19 @@ sim_data = diff(mydata$cargo)
 	##--------------------------------------------- 
 	
 	
+	if(sum(r_vec) == 0){
+		prop_probs = prop_probs[1:2]/sum(prop_probs[1:2])
+	}else if(sum(r_vec) == max_switch){
+		prop_probs = prop_probs[1:2]/sum(prop_probs[1:2])
+	}else{
+		prop_probs = alg_parameters$prop_probs
+	}
+	
+	
+	
+	
 	r_rv = runif(n = 1, 0, 1)
+
 	
 	if(r_rv <= prop_probs[1]){
 	
@@ -235,15 +250,16 @@ sim_data = diff(mydata$cargo)
 		
 		
 	} else{		
-		##--------------- Move the position of a single swithc point
-			if(sum(r_vec >0)){
-		
-				s_index = sample( which(r_vec ==1),1)
+		##--------------- Move the position of a single switch point
+				sprime_count = 0
+				while(sprime_count == 0){				
+					s_index = sample( which(r_vec ==1),1)
+					r_nos = r_vec; r_nos[s_index] = 0
+					r_vec012 = r_vec012_fnc(r_nos, min_dur)
+					sprime_to_sample = which(r_vec012 == 0); 
+					sprime_count = length(sprime_to_sample)
+				}
 				
-				r_nos = r_vec; r_nos[s_index] = 0
-				r_vec012 = r_vec012_fnc(r_nos, min_dur)
-				
-				sprime_to_sample = which(r_vec012 == 0); 
 				s_prime_index = sample(sprime_to_sample,1)
 				q_rprop_r = 1/length(sprime_to_sample) 	# q(r_prop)|r)
 		
@@ -269,9 +285,7 @@ sim_data = diff(mydata$cargo)
 					}else{
 					 r_vec = r_vec; accept_ind[it,3] = 0
 					} # end of the test cases
-			}else{
-				
-			r_vec = r_vec; accept_ind[it,3] = 0
+	
 		
 			} # end of option 3
 	
