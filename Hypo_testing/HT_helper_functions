@@ -242,6 +242,50 @@ pwaic_BM = function(Xn, post_samples, num_switch_pts = 0 ){
 
 
 
+##-------------------------------------------------------------------
+## Bayes Factor
+##-------------------------------------------------------------------
+
+marginal_loglike_null = function(mydata){
+	N = length(mydata)
+	num_states = 1
+	SSE = sum((mydata - mean(mydata))^2)
+	to_return = -(1/2)*sum(log(N))-1*((N-1)/2)*log(SSE)	
+	return(to_return)		
+}
+
+
+marginal_loglike_Mtau = function(M_tau, mydata){
+	N = length(mydata)
+	segment_length = diff(c(0, M_tau,N))
+	num_states = length(M_tau)+1
+	SSE = sum((mydata[1:M_tau] - mean(mydata[1:M_tau]))^2)+ sum((mydata[(M_tau+1):N] - mean(mydata[(M_tau+1):N]))^2)
+
+	to_return = -(1/2)*sum(log(segment_length))-1*((N-num_states)/2)*log(SSE)
+	return(to_return)	
+}
+
+
+log_BF_fnc = function(Xn, num_switch_pts = 0){
+		N = length(Xn)
+	if(num_switch_pts == 0){
+		const_term_null = (1/2)*log(pi) + lgamma((N- 1)/2)
+		null_logdata_term= marginal_loglike_null(Xn)	
+		return(null_logdata_term + const_term_null)		
+	}else if(num_switch_pts == 1){
+		k1_log_dataterms = sapply(1:(N-1), marginal_loglike_Mtau, mydata = Xn)
+		k1_dataterm = log(sum(exp(k1_log_dataterms)))
+		const_term_k1 = log(pi) + lgamma((N- 2)/2)
+		return(k1_dataterm + const_term_k1)
+	}
+	
+}
+
+
+
+
+
+
 
 ##============================================================
 ## Bayes model comparison Functions
