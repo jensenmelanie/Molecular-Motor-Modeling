@@ -124,6 +124,7 @@ stats = list()
 
 local_stats = list()
 local_stats$AMOC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+local_stats$BF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 local_stats$PBF = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 local_stats$Ell = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 local_stats$WAIC = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
@@ -138,11 +139,13 @@ for(l in 1:length(local_stats)){
 ## --------- ----------------------------
 ##Start of loop
 ##--------------------------------------
-AMOC_Zn = list(); PBF = list(); Ell = list(); WAIC = list()
+AMOC_Zn = list(); BF = list();PBF = list(); Ell = list(); WAIC = list()
 
 for( n in 1:length(N_values)){
 
 	AMOC_Zn[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	BF[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 
 	PBF[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 	Ell[[n]] = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
@@ -161,6 +164,10 @@ for( n in 1:length(N_values)){
 			## --------- Frequentist statistics ----------------------------
 			AMOC_stats = unlist(AMOC_stat(Xin))
 			AMOC_Zn[[n]][np,s] = AMOC_stats[1]
+
+			## --------- log BF statistics ----------------------------
+			logBF_stats = log_BF_fnc(Xin, length(true_tau)) - log_BF_fnc(Xin, 0)
+			BF[[n]][np,s] = logBF_stats
 
 			## --------- Bayesian statistics ----------------------------
 			approx_tau_post = FALSE
@@ -188,20 +195,22 @@ for( n in 1:length(N_values)){
 
 
 
-local_stats$AMOC[n,] = apply(AMOC_Zn[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha+0.01))]})
-local_stats$Ell[n,] = apply(Ell[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
-local_stats$PBF[n,] = apply(PBF[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
-local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha+0.01))]})
+local_stats$AMOC[n,] = apply(AMOC_Zn[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha))]})
+local_stats$BF[n,] = apply(BF[[n]], 2, function(x){sort(x)[floor(length(x)* (FDR_alpha))]})
+local_stats$Ell[n,] = apply(Ell[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha))]})
+local_stats$PBF[n,] = apply(PBF[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha))]})
+local_stats$WAIC[n,] = apply(WAIC[[n]], 2, function(x){sort(x)[floor(length(x)*(FDR_alpha))]})
 
 
 }#End of N loop
 
 
 global_FDR_fnc  = function(vector){
-	return(sort(vector)[floor(length(vector)*(FDR_alpha + 0.01))])
+	return(sort(vector)[floor(length(vector)*(FDR_alpha))])
 }
 
 stats$AMOC = global_FDR_fnc(unlist(AMOC_Zn))
+stats$BF = global_FDR_fnc(unlist(BF))
 stats$Ell =  global_FDR_fnc(unlist(Ell))
 stats$PBF = global_FDR_fnc(unlist(PBF))
 stats$WAIC =  global_FDR_fnc(unlist(WAIC))
