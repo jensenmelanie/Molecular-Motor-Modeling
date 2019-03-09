@@ -166,7 +166,7 @@ for( n in 1:length(N_values)){
 			AMOC_Zn[[n]][np,s] = AMOC_stats[1]
 
 			## --------- log BF statistics ----------------------------
-			logBF_stats = log_BF_fnc(Xin, length(true_tau)) - log_BF_fnc(Xin, 0)
+			logBF_stats = log_BF_fnc(Xin, length(true_tau))[1] - log_BF_fnc(Xin, 0)[1]
 			BF[[n]][np,s] = logBF_stats
 
 			## --------- Bayesian statistics ----------------------------
