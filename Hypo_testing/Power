@@ -143,6 +143,7 @@ stat_names = names(critical_global)
 
 stat_power = list(); stat_power$local = list(); stat_power$global = list()
 stat_med = list()
+map_tau = list()
 
 for( l in 1:length(stat_names)){
 	stat_power$local[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
@@ -151,13 +152,18 @@ for( l in 1:length(stat_names)){
 	stat_med[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 	rownames(stat_med[[l]]) = N_values; colnames(stat_med[[l]]) = sigma_sq_values
 	
-	
 	stat_power$global[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
 	rownames(stat_power$global[[l]]) = N_values; colnames(stat_power$global[[l]]) = sigma_sq_values
+	
+	map_tau$local[[l]] = matrix(nrow = length(N_values), ncol = length(sigma_sq_values))
+	rownames(map_tau$local[[l]]) = N_values; colnames(map_tau$local[[l]]) = sigma_sq_values
+	
 }
 
 names(stat_power$global) = stat_names
 names(stat_power$local) = stat_names
+names(map_tau$local) = stat_names
+
 names(stat_med) = stat_names
 ## --------- ----------------------------
 ##Start of loop
@@ -168,6 +174,9 @@ for( n in 1:length(N_values)){
 
 	AMOC_Zn = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 	AMOC_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+
+	BF = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
+	BF_tau = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 
 	PBF = matrix(nrow = num_paths,ncol = length(sigma_sq_values))
 	Ell = matrix(nrow = num_paths,ncol = length(sigma_sq_values))	
@@ -188,6 +197,12 @@ for( n in 1:length(N_values)){
 			AMOC_stats = unlist(AMOC_stat(Xin))
 			AMOC_Zn[np,s] = AMOC_stats[1]
 			AMOC_tau[np,s] = AMOC_stats[2]
+
+			## --------- log BF statistics ----------------------------
+			logBF_stats_k1 = log_BF_fnc(Xin, length(true_tau)) 
+			logBF_stats_k0 = log_BF_fnc(Xin, 0)
+			BF[np,s] = logBF_stats_k1[1] - logBF_stats_k0[1]
+			BF_tau[np,s] = logBF_stats_k1[2]
 
 			## --------- Bayesian statistics ----------------------------
 			approx_tau_post = FALSE
@@ -231,20 +246,38 @@ power_fnc_perN_global = function(index, test_stat, critical_value, ineq = "geq")
 			}
 	}
 
+map_tau_estimator = function(index, tau_samp, num_obs){
+	x_index = which.max(density(tau_samp[,index], from = 1, to= num_obs-1)$y)
+	return(density(tau_samp[,index], from = 1, to= num_obs-1)$x[x_index])
+}
+
+
+##------------------LOCAL tau_map --------------------
+map_tau$local$AMOC[n,] = sapply(1:ncol(AMOC_tau), map_tau_estimator, tau_samp = AMOC_tau, num_obs = N)
+map_tau$local$BF[n,] = sapply(1:ncol(BF_tau), map_tau_estimator, tau_samp = BF_tau, num_obs = N)
+map_tau$local$Ell[n,] = sapply(1:ncol(Bayes_tau), map_tau_estimator, tau_samp = Bayes_tau, num_obs = N)
+map_tau$local$PBF[n,]  = map_tau$local$Ell[n,] 
+map_tau$local$WAIC[n,]  = map_tau$local$Ell[n,] 
+
+
 ##------------------LOCAL POWER --------------------
 stat_power$local$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = AMOC_Zn, critical_value = critical_local$AMOC)/num_paths
+stat_power$local$BF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = BF, critical_value = critical_local$BF)/num_paths
 stat_power$local$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = Ell, critical_value = critical_local$Ell)/num_paths
 stat_power$local$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = PBF, critical_value = critical_local$PBF)/num_paths
 stat_power$local$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN, test_stat = WAIC, critical_value = critical_local$WAIC, ineq = "geq")/num_paths
 
 ##-----------------GLOBAL POWER---------------------
 stat_power$global$AMOC[n,] =sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = AMOC_Zn, critical_value = critical_global$AMOC)/num_paths
+stat_power$global$BF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = BF, critical_value = critical_global$BF)/num_paths
 stat_power$global$Ell[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = Ell, critical_value = critical_global$Ell)/num_paths
 stat_power$global$PBF[n,] = sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = PBF, critical_value = critical_global$PBF)/num_paths
 stat_power$global$WAIC[n,] =  sapply(1:length(sigma_sq_values), power_fnc_perN_global, test_stat = WAIC, critical_value = critical_global$WAIC, ineq = "geq")/num_paths
 
 ##-----------------MEDIAN TEST STATISTIC---------------------
 stat_med$AMOC[n,] =apply( AMOC_Zn,2, median)
+stat_med$BF[n,] = apply(BF,2, median)
+
 stat_med$Ell[n,] = apply(Ell,2, median)
 stat_med$PBF[n,] = apply( PBF,2, median)
 stat_med$WAIC[n,] =  apply(WAIC,2, median)
@@ -253,6 +286,8 @@ stat_med$WAIC[n,] =  apply(WAIC,2, median)
 if(plot_it == TRUE){
 	
 	AMOC_plot = plot_stats_power(AMOC_Zn, AMOC_tau, sigma_sq_values, c(0, N), critical_local$AMOC[n,] ) + ggtitle(paste("AMOC, mu = ",mu, ", N = ",N))
+	BF_plot = plot_stats_power(BF, BF_tau, sigma_sq_values, c(0, N),critical_local$Ell[n,] ) + ggtitle(paste("Ell, mu = ",mu, ", N = ",N))
+
 	Ell_plot = plot_stats_power(Ell, Bayes_tau, sigma_sq_values, c(0, N),critical_local$Ell[n,] ) + ggtitle(paste("Ell, mu = ",mu, ", N = ",N))
 	PBF_plot = plot_stats_power(PBF, Bayes_tau, sigma_sq_values, c(0, N) ,critical_local$PBF[n,]) + ggtitle(paste("PBF, mu = ",mu, ", N = ",N))
 	WAIC_plot = plot_stats_power(WAIC, Bayes_tau, sigma_sq_values, c(0, N) ,critical_local$PBF[n,]) + ggtitle(paste("WAIC, mu = ",mu, ", N = ",N))
@@ -270,7 +305,7 @@ if(plot_it == TRUE){
 	print(ggplot(model_comp_df) + geom_point(aes(x = N, y = stat, color = as.factor(sigma))) + geom_line(aes(x = N, y = stat, color = as.factor(sigma))) + facet_grid(~stat_type) +labs(x = "Number of Observations", y= "Power") + ylim(0,1)+ scale_color_discrete(name = expression(sigma))+ scale_x_log10()+ ggtitle(paste("Power for mu = ",mu)))
 }
 
-return(list(power = stat_power, stat = stat_med))
+return(list(power = stat_power, stat = stat_med, tau = map_tau))
 
 
 }# end of the function
