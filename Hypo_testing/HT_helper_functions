@@ -269,17 +269,20 @@ marginal_loglike_Mtau = function(M_tau, mydata){
 log_BF_fnc = function(Xn, num_switch_pts = 0){
 		N = length(Xn)
 	if(num_switch_pts == 0){
-		const_term_null = (1/2)*log(pi) + lgamma((N- 1)/2)
+		prior_M = 1/choose(N, 0)
+		const_term_null = (1/2)*log(pi) + lgamma((N- 1)/2) + log(prior_M)
 		null_logdata_term= marginal_loglike_null(Xn)	
-		return(null_logdata_term + const_term_null)		
+		return(c(null_logdata_term + const_term_null, 0))		
 	}else if(num_switch_pts == 1){
+		prior_M = 1/choose(N, num_switch_pts)
 		k1_log_dataterms = sapply(1:(N-1), marginal_loglike_Mtau, mydata = Xn)
 		k1_dataterm = log(sum(exp(k1_log_dataterms)))
-		const_term_k1 = log(pi) + lgamma((N- 2)/2)
-		return(k1_dataterm + const_term_k1)
+		const_term_k1 = log(pi) + lgamma((N- 2)/2) + log(prior_M)
+		return(c(k1_dataterm + const_term_k1,which.max(k1_log_dataterms)))
 	}
 	
 }
+
 
 
 
